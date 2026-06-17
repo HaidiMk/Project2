@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+
+env/
+venv/
+env_project1/
+
+output/
+
+.vscode/
+.idea/
+
+*.log
+
+# AI model (إذا ما بدك ترفعيه)
+# *.pt
+
+# Datasets
+Expert System/data/cleaned_recipes.csv
+Expert System/data/cleaned_recipes_full.csv
+Expert System/data/recipes.csv
+
+# أو بشكل عام
+*.csv
