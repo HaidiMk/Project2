@@ -68,6 +68,19 @@ class DietaryExpertSystem:
         rules = get_applicable_rules(profile)
         df    = self.df.copy()
 
+        # ══ 0: استبعاد وصفات غير مخصصة للبشر (حيوانات) ════
+        PET_RECIPE_BLACKLIST = [
+            "for dogs", "for cats", "for puppies", "for kittens",
+            "for your dog", "for your cat", "for your pet",
+            "dog treats", "cat treats", "dog food", "cat food",
+            "pet treats", "pet food", "doggie", "for horses",
+        ]
+        if "Name" in df.columns:
+            pet_pattern = "|".join(re.escape(p) for p in PET_RECIPE_BLACKLIST)
+            df = df[~df["Name"].fillna("").str.lower().str.contains(
+                pet_pattern, regex=True, na=False
+            )]
+
         # ══ 1: فلتر الحلال ═══════════════════════════════
         if self._ing_col:
             df = df[~df[self._ing_col].apply(

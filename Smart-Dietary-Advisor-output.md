@@ -3,8 +3,8 @@
 ## 📊 Project Information
 
 - **Project Name**: `Smart-Dietary-Advisor`
-- **Generated On**: 2026-06-02 16:21:05 (Asia/Damascus / GMT+03:00)
-- **Total Files Processed**: 58
+- **Generated On**: 2026-06-17 20:58:03 (Asia/Damascus / GMT+03:00)
+- **Total Files Processed**: 62
 - **Export Tool**: Easy Whole Project to Single Text File for LLMs v1.1.0
 - **Tool Author**: Jota / José Guilherme Pandolfi
 
@@ -20,75 +20,82 @@
 ## 🌳 Project Structure
 
 ```
-└── 📁 Expert System/
-    ├── 📁 core/
-    │   ├── 📁 __pycache__/
-    │   │   ├── 📄 __init__.cpython-312.pyc (149 B)
-    │   │   ├── 📄 __init__.cpython-313.pyc (148 B)
-    │   │   ├── 📄 constants.cpython-312.pyc (5.16 KB)
-    │   │   ├── 📄 constants.cpython-313.pyc (5.15 KB)
-    │   │   ├── 📄 user_profile.cpython-312.pyc (5.36 KB)
-    │   │   └── 📄 user_profile.cpython-313.pyc (5.44 KB)
-    │   ├── 📄 __init__.py (15 B)
-    │   ├── 📄 constants.py (7.59 KB)
-    │   └── 📄 user_profile.py (3.86 KB)
-    ├── 📁 data/
-    │   ├── 📄 cleaned_recipes_full.csv (994.07 MB)
-    │   ├── 📄 cleaned_recipes.csv (496.27 MB)
-    │   ├── 📄 ncf_model.pt (16.73 KB)
-    │   └── 📄 recipes.csv (671.59 MB)
-    ├── 📁 engine/
-    │   ├── 📁 __pycache__/
-    │   │   ├── 📄 __init__.cpython-312.pyc (151 B)
-    │   │   ├── 📄 __init__.cpython-313.pyc (150 B)
-    │   │   ├── 📄 filtering_engine.cpython-312.pyc (13.58 KB)
-    │   │   ├── 📄 filtering_engine.cpython-313.pyc (13.49 KB)
-    │   │   ├── 📄 ncf_model.cpython-312.pyc (8.63 KB)
-    │   │   ├── 📄 ncf_model.cpython-313.pyc (8.75 KB)
-    │   │   ├── 📄 rule_builder.cpython-312.pyc (6.63 KB)
-    │   │   ├── 📄 rule_builder.cpython-313.pyc (6.73 KB)
-    │   │   ├── 📄 scorer.cpython-312.pyc (8.43 KB)
-    │   │   └── 📄 scorer.cpython-313.pyc (8.91 KB)
-    │   ├── 📄 __init__.py (17 B)
-    │   ├── 📄 filtering_engine.py (10.2 KB)
-    │   ├── 📄 ncf_model.py (5.84 KB)
-    │   ├── 📄 rule_builder.py (6.67 KB)
-    │   └── 📄 scorer.py (7.11 KB)
-    ├── 📁 output/
-    │   ├── 📄 eda_report.txt (79 B)
-    │   └── 📄 safe_recipes.json (417.91 KB)
-    ├── 📁 rules/
-    │   ├── 📁 __pycache__/
-    │   │   ├── 📄 __init__.cpython-312.pyc (150 B)
-    │   │   ├── 📄 __init__.cpython-313.pyc (149 B)
-    │   │   ├── 📄 combined_rules.cpython-312.pyc (15.79 KB)
-    │   │   ├── 📄 combined_rules.cpython-313.pyc (15.78 KB)
-    │   │   ├── 📄 goals_and_preferences.cpython-312.pyc (6.16 KB)
-    │   │   ├── 📄 goals_and_preferences.cpython-313.pyc (6.18 KB)
-    │   │   ├── 📄 halal_and_allergies.cpython-312.pyc (2.11 KB)
-    │   │   ├── 📄 halal_and_allergies.cpython-313.pyc (2.11 KB)
-    │   │   ├── 📄 medical_rules.cpython-312.pyc (16.79 KB)
-    │   │   └── 📄 medical_rules.cpython-313.pyc (16.79 KB)
-    │   ├── 📄 __init__.py (16 B)
-    │   ├── 📄 combined_rules.py (35.67 KB)
-    │   ├── 📄 goals_and_preferences.py (9.63 KB)
-    │   ├── 📄 halal_and_allergies.py (3.74 KB)
-    │   └── 📄 medical_rules.py (37.49 KB)
-    ├── 📁 ui/
-    │   ├── 📁 __pycache__/
-    │   │   ├── 📄 __init__.cpython-312.pyc (147 B)
-    │   │   ├── 📄 __init__.cpython-313.pyc (146 B)
-    │   │   ├── 📄 cli_interface.cpython-312.pyc (18.96 KB)
-    │   │   └── 📄 cli_interface.cpython-313.pyc (19.25 KB)
-    │   ├── 📄 __init__.py (13 B)
-    │   └── 📄 cli_interface.py (15.35 KB)
-    ├── 📄 3)
-    ├── 📄 check.py (601 B)
-    ├── 📄 cleaner.py (26.37 KB)
-    ├── 📄 eda_report.py (6.59 KB)
-    ├── 📄 main.py (4.29 KB)
-    ├── 📄 README.md (5.95 KB)
-    └── 📄 test_system.py (7.35 KB)
+├── 📁 Expert System/
+│   ├── 📁 __pycache__/
+│   │   └── 📄 main.cpython-312.pyc (5.88 KB)
+│   ├── 📁 core/
+│   │   ├── 📁 __pycache__/
+│   │   │   ├── 📄 __init__.cpython-312.pyc (149 B)
+│   │   │   ├── 📄 __init__.cpython-313.pyc (148 B)
+│   │   │   ├── 📄 constants.cpython-312.pyc (5.16 KB)
+│   │   │   ├── 📄 constants.cpython-313.pyc (5.15 KB)
+│   │   │   ├── 📄 user_profile.cpython-312.pyc (5.36 KB)
+│   │   │   └── 📄 user_profile.cpython-313.pyc (5.44 KB)
+│   │   ├── 📄 __init__.py (15 B)
+│   │   ├── 📄 constants.py (7.59 KB)
+│   │   └── 📄 user_profile.py (3.86 KB)
+│   ├── 📁 data/
+│   │   ├── 📄 cleaned_recipes_full.csv (994.07 MB)
+│   │   ├── 📄 cleaned_recipes.csv (496.27 MB)
+│   │   ├── 📄 ncf_model.pt (16.73 KB)
+│   │   └── 📄 recipes.csv (671.59 MB)
+│   ├── 📁 engine/
+│   │   ├── 📁 __pycache__/
+│   │   │   ├── 📄 __init__.cpython-312.pyc (151 B)
+│   │   │   ├── 📄 __init__.cpython-313.pyc (150 B)
+│   │   │   ├── 📄 filtering_engine.cpython-312.pyc (13.58 KB)
+│   │   │   ├── 📄 filtering_engine.cpython-313.pyc (13.49 KB)
+│   │   │   ├── 📄 ncf_model.cpython-312.pyc (8.63 KB)
+│   │   │   ├── 📄 ncf_model.cpython-313.pyc (8.75 KB)
+│   │   │   ├── 📄 rule_builder.cpython-312.pyc (6.63 KB)
+│   │   │   ├── 📄 rule_builder.cpython-313.pyc (6.73 KB)
+│   │   │   ├── 📄 scorer.cpython-312.pyc (8.43 KB)
+│   │   │   └── 📄 scorer.cpython-313.pyc (8.91 KB)
+│   │   ├── 📄 __init__.py (17 B)
+│   │   ├── 📄 filtering_engine.py (10.83 KB)
+│   │   ├── 📄 ncf_model.py (5.84 KB)
+│   │   ├── 📄 rule_builder.py (6.67 KB)
+│   │   └── 📄 scorer.py (7.11 KB)
+│   ├── 📁 output/
+│   │   ├── 📄 eda_report.txt (79 B)
+│   │   └── 📄 safe_recipes.json (417.91 KB)
+│   ├── 📁 rules/
+│   │   ├── 📁 __pycache__/
+│   │   │   ├── 📄 __init__.cpython-312.pyc (150 B)
+│   │   │   ├── 📄 __init__.cpython-313.pyc (149 B)
+│   │   │   ├── 📄 combined_rules.cpython-312.pyc (15.79 KB)
+│   │   │   ├── 📄 combined_rules.cpython-313.pyc (15.78 KB)
+│   │   │   ├── 📄 goals_and_preferences.cpython-312.pyc (6.16 KB)
+│   │   │   ├── 📄 goals_and_preferences.cpython-313.pyc (6.18 KB)
+│   │   │   ├── 📄 halal_and_allergies.cpython-312.pyc (2.11 KB)
+│   │   │   ├── 📄 halal_and_allergies.cpython-313.pyc (2.11 KB)
+│   │   │   ├── 📄 medical_rules.cpython-312.pyc (16.79 KB)
+│   │   │   └── 📄 medical_rules.cpython-313.pyc (16.79 KB)
+│   │   ├── 📄 __init__.py (16 B)
+│   │   ├── 📄 combined_rules.py (35.67 KB)
+│   │   ├── 📄 goals_and_preferences.py (9.63 KB)
+│   │   ├── 📄 halal_and_allergies.py (3.74 KB)
+│   │   └── 📄 medical_rules.py (37.49 KB)
+│   ├── 📁 ui/
+│   │   ├── 📁 __pycache__/
+│   │   │   ├── 📄 __init__.cpython-312.pyc (147 B)
+│   │   │   ├── 📄 __init__.cpython-313.pyc (146 B)
+│   │   │   ├── 📄 cli_interface.cpython-312.pyc (18.96 KB)
+│   │   │   └── 📄 cli_interface.cpython-313.pyc (19.25 KB)
+│   │   ├── 📄 __init__.py (13 B)
+│   │   └── 📄 cli_interface.py (15.35 KB)
+│   ├── 📄 check.py (601 B)
+│   ├── 📄 cleaner.py (26.37 KB)
+│   ├── 📄 eda_report.py (6.59 KB)
+│   ├── 📄 main.py (4.29 KB)
+│   ├── 📄 README.md (5.95 KB)
+│   └── 📄 test_system.py (7.35 KB)
+└── 📁 TOPSIS/
+    ├── 📁 __pycache__/
+    │   └── 📄 topsis_model.cpython-312.pyc (4.5 KB)
+    ├── 📄 main.py (3.55 KB)
+    ├── 📄 run_topsis.py (3.1 KB)
+    └── 📄 topsis_model.py (6.23 KB)
 ```
 
 ## 📑 Table of Contents
@@ -118,6 +125,9 @@
 - [📄 Expert System/main.py](#📄-expert-system-main-py)
 - [📄 Expert System/README.md](#📄-expert-system-readme-md)
 - [📄 Expert System/test_system.py](#📄-expert-system-test-system-py)
+- [📄 TOPSIS/main.py](#📄-topsis-main-py)
+- [📄 TOPSIS/run_topsis.py](#📄-topsis-run-topsis-py)
+- [📄 TOPSIS/topsis_model.py](#📄-topsis-topsis-model-py)
 
 ---
 
@@ -125,26 +135,31 @@
 
 | Metric | Count |
 |--------|-------|
-| Total Files | 58 |
-| Total Directories | 11 |
-| Text Files | 23 |
-| Binary Files | 35 |
+| Total Files | 62 |
+| Total Directories | 14 |
+| Text Files | 26 |
+| Binary Files | 36 |
 | Total Size | 2.11 GB |
 
 ### 📄 File Types Distribution
 
 | Extension | Count |
 |-----------|-------|
-| `.pyc` | 30 |
-| `.py` | 20 |
+| `.pyc` | 32 |
+| `.py` | 23 |
 | `.csv` | 3 |
 | `.pt` | 1 |
 | `.txt` | 1 |
 | `.json` | 1 |
-| `no extension` | 1 |
 | `.md` | 1 |
 
 ## 💻 File Code Contents
+
+## 🚫 Binary/Excluded Files
+
+The following files were not included in the text content:
+
+- `Expert System/__pycache__/main.cpython-312.pyc`
 
 ## 🚫 Binary/Excluded Files
 
@@ -165,7 +180,7 @@ The following files were not included in the text content:
 - **Language**: `python`
 - **Location**: `Expert System/core/__init__.py`
 - **Relative Path**: `Expert System/core`
-- **Created**: 2026-05-04 14:58:10 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **MD5**: `f394aae11d74cd0dd93626bc2b1e7aea`
 - **SHA256**: `5d21070956458d55a1d0c8893c0da184747f5cd2fa96147a58c86d7389d4860c`
@@ -188,7 +203,7 @@ The following files were not included in the text content:
 - **Language**: `python`
 - **Location**: `Expert System/core/constants.py`
 - **Relative Path**: `Expert System/core`
-- **Created**: 2026-05-05 17:35:20 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **MD5**: `fd004f0468d8e151945465abf89fa403`
 - **SHA256**: `5bf416777d90b5fc24658eeeed05a6b3340cfe026b1ca6ae863d7a8b7631ee19`
@@ -415,7 +430,7 @@ COLUMN_NAMES: List[str] = [
 - **Language**: `python`
 - **Location**: `Expert System/core/user_profile.py`
 - **Relative Path**: `Expert System/core`
-- **Created**: 2026-05-05 19:07:36 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **MD5**: `920b2954c6a150e6082246fa122d21b5`
 - **SHA256**: `970f2613683c2c205fdf280d7453fd4cffaeea0e244ad085aa001aa10bc22992`
@@ -564,7 +579,7 @@ The following files were not included in the text content:
 - **Language**: `python`
 - **Location**: `Expert System/engine/__init__.py`
 - **Relative Path**: `Expert System/engine`
-- **Created**: 2026-05-04 14:58:14 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `7cd6e9759747d4726100e6e1cae9b773`
 - **SHA256**: `b1f1dff770d6e080df2300016c19c55c8513e3db21e9ce19c357f4c0423d3be9`
@@ -582,15 +597,15 @@ The following files were not included in the text content:
 ### <a id="📄-expert-system-engine-filtering-engine-py"></a>📄 `Expert System/engine/filtering_engine.py`
 
 **File Info:**
-- **Size**: 10.2 KB
+- **Size**: 10.83 KB
 - **Extension**: `.py`
 - **Language**: `python`
 - **Location**: `Expert System/engine/filtering_engine.py`
 - **Relative Path**: `Expert System/engine`
-- **Created**: 2026-05-08 11:59:40 (Asia/Damascus / GMT+03:00)
-- **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
-- **MD5**: `0cec5d44d4b11939618664b55290f188`
-- **SHA256**: `2b2fa5cfa6c06dad82f19e6bd67b5787d436d5e95d7f022ccd7d1c199f8eb1e3`
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
+- **Modified**: 2026-06-17 20:58:03 (Asia/Damascus / GMT+03:00)
+- **MD5**: `3f020222960461b543f5bc3b03e069b6`
+- **SHA256**: `1aa5f6aef464c179ebdc30fa380d9b030e9490a9b128d038eb6a7e6717011bba`
 - **Encoding**: UTF-8
 
 **File code content:**
@@ -665,6 +680,19 @@ class DietaryExpertSystem:
     def filter_recipes(self, profile: UserProfile) -> dict:
         rules = get_applicable_rules(profile)
         df    = self.df.copy()
+
+        # ══ 0: استبعاد وصفات غير مخصصة للبشر (حيوانات) ════
+        PET_RECIPE_BLACKLIST = [
+            "for dogs", "for cats", "for puppies", "for kittens",
+            "for your dog", "for your cat", "for your pet",
+            "dog treats", "cat treats", "dog food", "cat food",
+            "pet treats", "pet food", "doggie", "for horses",
+        ]
+        if "Name" in df.columns:
+            pet_pattern = "|".join(re.escape(p) for p in PET_RECIPE_BLACKLIST)
+            df = df[~df["Name"].fillna("").str.lower().str.contains(
+                pet_pattern, regex=True, na=False
+            )]
 
         # ══ 1: فلتر الحلال ═══════════════════════════════
         if self._ing_col:
@@ -845,7 +873,7 @@ class DietaryExpertSystem:
 - **Language**: `python`
 - **Location**: `Expert System/engine/ncf_model.py`
 - **Relative Path**: `Expert System/engine`
-- **Created**: 2026-05-08 11:57:06 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `4f7387d6b214308e06ce08c551e231b8`
 - **SHA256**: `fb4c0f64019524ee54a11fa2e596ba7da011026c52e9e4d9d502601949914af7`
@@ -1039,7 +1067,7 @@ class NCFRecommender:
 - **Language**: `python`
 - **Location**: `Expert System/engine/rule_builder.py`
 - **Relative Path**: `Expert System/engine`
-- **Created**: 2026-05-05 18:04:40 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `017a5774927ac6192abff638aa0ebe8f`
 - **SHA256**: `73328c1cd2e07f83eeddccc1c469d030533bf265fb8679a12dc4feb8d8450519`
@@ -1214,7 +1242,7 @@ def get_applicable_rules(profile: "UserProfile") -> dict:
 - **Language**: `python`
 - **Location**: `Expert System/engine/scorer.py`
 - **Relative Path**: `Expert System/engine`
-- **Created**: 2026-05-05 17:45:38 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `63c3727fa56fb8b836d1a38ba4b77026`
 - **SHA256**: `3fba848659cc2bc97c2de22359552a7a85e7f5ebdfaa0deb12d3b7d6dab32221`
@@ -1408,7 +1436,7 @@ def explain_recipe(row: "pd.Series", goal: Optional[str]) -> str:
 - **Language**: `text`
 - **Location**: `Expert System/output/eda_report.txt`
 - **Relative Path**: `Expert System/output`
-- **Created**: 2026-05-08 13:50:26 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `8a04e17090b66556764627b278546d9c`
 - **SHA256**: `c8ec9eb5ea5f541ae05da1798c6dddbc5a72ae7a8a98f9fe5fb4ee04eb416f50`
@@ -1432,7 +1460,7 @@ Total Columns: 41
 - **Language**: `json`
 - **Location**: `Expert System/output/safe_recipes.json`
 - **Relative Path**: `Expert System/output`
-- **Created**: 2026-05-05 09:51:46 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `3887448b1ed5a1ab8ddf9a4f358d162f`
 - **SHA256**: `ad5668f49e80a416bae3b458df53db84b0906e2d512d4c6d7587a0679dc2a9ba`
@@ -17814,7 +17842,7 @@ The following files were not included in the text content:
 - **Language**: `python`
 - **Location**: `Expert System/rules/__init__.py`
 - **Relative Path**: `Expert System/rules`
-- **Created**: 2026-05-04 14:58:14 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `af03bd8bb941bf1a15620ab585f25df7`
 - **SHA256**: `1698d43856972ac4fef9013522929167b2e7f1daf41036d0dcfa3aeae23e6b58`
@@ -17837,7 +17865,7 @@ The following files were not included in the text content:
 - **Language**: `python`
 - **Location**: `Expert System/rules/combined_rules.py`
 - **Relative Path**: `Expert System/rules`
-- **Created**: 2026-05-04 14:54:38 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `0c94e67fceb929fe26417976b6f947c0`
 - **SHA256**: `47bde861389ee71164d4b5b00f54965f9f839d77cb8a7a9a8f15a80a0f68604e`
@@ -18750,7 +18778,7 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
 - **Language**: `python`
 - **Location**: `Expert System/rules/goals_and_preferences.py`
 - **Relative Path**: `Expert System/rules`
-- **Created**: 2026-05-04 19:18:30 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `d51a2018f1705d02110284b4e5dc77c3`
 - **SHA256**: `410a5f1d523034e64dc9e3ca3045b825aa54adf84ea7ab39eae66961c6acc7e3`
@@ -19042,7 +19070,7 @@ def get_healthy_diet_style(profile: "UserProfile") -> Dict[str, str]:
 - **Language**: `python`
 - **Location**: `Expert System/rules/halal_and_allergies.py`
 - **Relative Path**: `Expert System/rules`
-- **Created**: 2026-05-04 14:52:36 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `3066e7a961072dab905b2a42bcf81b05`
 - **SHA256**: `a14e6084543b709704974b0189a542326cdca528c253894055826d7ea30048e2`
@@ -19147,7 +19175,7 @@ ALLERGY_RULES: Dict[str, Dict[str, Any]] = {
 - **Language**: `python`
 - **Location**: `Expert System/rules/medical_rules.py`
 - **Relative Path**: `Expert System/rules`
-- **Created**: 2026-05-04 14:52:16 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `289f1760a48f78e1e8021d383915c78e`
 - **SHA256**: `47f245f0474b49555e6ce1a83d642d3a9407dc01ded1dc58dfb2fb5e784ad435`
@@ -20145,7 +20173,7 @@ The following files were not included in the text content:
 - **Language**: `python`
 - **Location**: `Expert System/ui/__init__.py`
 - **Relative Path**: `Expert System/ui`
-- **Created**: 2026-05-04 14:58:14 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `7e68c54a9ff72e352b21074940f939cf`
 - **SHA256**: `9c3e2c5292cbcafaf8bb96b1851db42fe4e6692fe87ff99b34e7997fd2e79d31`
@@ -20168,7 +20196,7 @@ The following files were not included in the text content:
 - **Language**: `python`
 - **Location**: `Expert System/ui/cli_interface.py`
 - **Relative Path**: `Expert System/ui`
-- **Created**: 2026-05-05 18:02:42 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:46 (Asia/Damascus / GMT+03:00)
 - **MD5**: `2111654afb10405603ef37ac6cf73bf5`
 - **SHA256**: `7ad4982c67a2ffbbe567ecbbd93b5db51ba33325ace57f0753c9ae4ea4e01f7f`
@@ -20584,7 +20612,7 @@ def print_results(result: dict, top_n: int = 15):
 - **Language**: `python`
 - **Location**: `Expert System/check.py`
 - **Relative Path**: `Expert System`
-- **Created**: 2026-05-05 19:30:14 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **MD5**: `e54248443be2ca9ab125f9686381ca62`
 - **SHA256**: `39e9dc624412bb3cae398a193b2075113800191e2da8b110050abd88ac527455`
@@ -20621,7 +20649,7 @@ for word in halal_words:
 - **Language**: `python`
 - **Location**: `Expert System/cleaner.py`
 - **Relative Path**: `Expert System`
-- **Created**: 2026-05-03 13:48:54 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **MD5**: `ce9f8b8cb1252c892da37fd47ce0b75d`
 - **SHA256**: `2996afeb115a4de3dcb5bf3ee59de017e9980e169d374053295be7dbabcd2dd5`
@@ -21285,7 +21313,7 @@ for col in ["Name", "MealType", "MainCategory", "DietType", "Calories",
 - **Language**: `python`
 - **Location**: `Expert System/eda_report.py`
 - **Relative Path**: `Expert System`
-- **Created**: 2026-05-08 13:50:04 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **MD5**: `31767dd6730cf0f7b6b3f4c8aa4527e5`
 - **SHA256**: `382723d32cb108985bbd787602490ac150e67b9dd6e0079cca38975104cc143a`
@@ -21462,7 +21490,7 @@ print("=" * 60)
 - **Language**: `python`
 - **Location**: `Expert System/main.py`
 - **Relative Path**: `Expert System`
-- **Created**: 2026-05-08 12:13:46 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:21:04 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:21:04 (Asia/Damascus / GMT+03:00)
 - **MD5**: `c1d8b7c79fd6e85c1f1b081f06f268bc`
 - **SHA256**: `fc1e6b3f23df4079be4da722a858c5712a723e3470b548b2e08c0cfe5d53324f`
@@ -21673,7 +21701,7 @@ if __name__ == "__main__":
 - **Language**: `text`
 - **Location**: `Expert System/README.md`
 - **Relative Path**: `Expert System`
-- **Created**: 2026-05-08 13:55:58 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **MD5**: `769a291e77b9739850313aabf1eeaddc`
 - **SHA256**: `0f26e01ffcd701bab0f473419af4b219a874cf5607ec5dea8a00cea6d0cc346a`
@@ -21902,7 +21930,7 @@ Output: Linear(16 → 1) + Sigmoid × 5
 - **Language**: `python`
 - **Location**: `Expert System/test_system.py`
 - **Relative Path**: `Expert System`
-- **Created**: 2026-05-08 11:29:46 (Asia/Damascus / GMT+03:00)
+- **Created**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **Modified**: 2026-06-02 16:09:28 (Asia/Damascus / GMT+03:00)
 - **MD5**: `3084c34c5af7ea4a8841fe59309f99f7`
 - **SHA256**: `8da14abe08d5ead03642ae82ff11b88f000533cf026bb8fb97f56caec7349207`
@@ -22086,5 +22114,371 @@ print("=" * 60)
 
 The following files were not included in the text content:
 
-- `Expert System/3)`
+- `TOPSIS/__pycache__/topsis_model.cpython-312.pyc`
+
+### <a id="📄-topsis-main-py"></a>📄 `TOPSIS/main.py`
+
+**File Info:**
+- **Size**: 3.55 KB
+- **Extension**: `.py`
+- **Language**: `python`
+- **Location**: `TOPSIS/main.py`
+- **Relative Path**: `TOPSIS`
+- **Created**: 2026-06-17 20:44:39 (Asia/Damascus / GMT+03:00)
+- **Modified**: 2026-06-17 20:45:22 (Asia/Damascus / GMT+03:00)
+- **MD5**: `403f4e8bbe2d5c72fdedff7049e17da0`
+- **SHA256**: `d81c96ac0cb6462a1a01dec52cc5463044b7b14b3d549c061579f4482599b736`
+- **Encoding**: UTF-8
+
+**File code content:**
+
+```python
+"""
+main.py — نقطة الدخول الموحّدة (Expert System ثم TOPSIS)
+===========================================================
+التسلسل:
+    1. تحميل البيانات وتشغيل النظام الخبير (Layer 1)
+    2. المستخدم يدخل بياناته مرة واحدة فقط (build_profile_interactive)
+    3. طباعة نتيجة النظام الخبير كما هي (print_results)
+    4. تطبيق TOPSIS على نفس الوصفات الآمنة وطباعة ترتيبها (Layer 2)
+
+شغّله من جوا مجلد TOPSIS:
+    python main.py
+"""
+
+import sys
+from pathlib import Path
+
+# ── إضافة مجلد "Expert System" لمسار البحث ──────────────────
+EXPERT_SYSTEM_DIR = Path(__file__).resolve().parent.parent / "Expert System"
+sys.path.insert(0, str(EXPERT_SYSTEM_DIR))
+
+from main import load_data                       # تحميل CSV (من Expert System)
+from engine.filtering_engine import DietaryExpertSystem
+from ui.cli_interface import build_profile_interactive, print_results
+
+from topsis_model import topsis_score
+
+
+def rank_with_topsis(df, profile):
+    """رتّب الوصفات الآمنة بخوارزمية TOPSIS حسب هدف المستخدم."""
+    df = df.copy()
+    df["_topsis_score"] = topsis_score(df, goal=profile.goal)
+    return df.sort_values("_topsis_score", ascending=False).reset_index(drop=True)
+
+
+def print_topsis_results(ranked_df, top_n: int = 10):
+    """طباعة نتيجة TOPSIS بشكل جدول مبسّط."""
+    print("\n" + "=" * 90)
+    print("  TOPSIS Ranking — Layer 2".center(88))
+    print("=" * 90)
+
+    if ranked_df.empty:
+        print("  No recipes to rank.")
+        return
+
+    hdr = (f"  {'#':<3} {'Recipe Name':<45} "
+           f"{'Cal':>6} {'Prot':>5} {'Sugar':>6} {'TOPSIS':>8}")
+    print(hdr)
+    print("  " + "-" * 86)
+
+    for i, (_, row) in enumerate(ranked_df.head(top_n).iterrows(), 1):
+        name = str(row.get("Name", "Unknown"))
+        name = (name[:42] + "..") if len(name) > 44 else name.ljust(44)
+        cal   = row.get("Calories", 0)
+        prot  = row.get("ProteinContent", 0)
+        sugar = row.get("SugarContent", 0)
+        score = row.get("_topsis_score", 0)
+
+        print(f"  {i:<3} {name} "
+              f"{cal:>6.0f} {prot:>5.0f} {sugar:>6.1f} {score:>8.4f}")
+
+    print("=" * 90)
+
+
+def main():
+    # ── 1) تحميل البيانات + تشغيل النظام الخبير ────────────
+    df = load_data()
+    system = DietaryExpertSystem(df, train_ncf=False)
+
+    try:
+        # ── 2) إدخال بيانات المستخدم (مرة واحدة فقط) ───────
+        profile = build_profile_interactive()
+
+        print("\n⏳  Generating personalized meal plan...\n")
+
+        # ── 3) نتيجة النظام الخبير (Layer 1) ────────────────
+        result = system.filter_recipes(profile)
+        print_results(result, top_n=15)
+
+        # ── 4) تطبيق TOPSIS على نفس الوصفات الآمنة (Layer 2) ─
+        ranked = rank_with_topsis(result["safe_recipes"], profile)
+        print_topsis_results(ranked, top_n=10)
+
+    except ValueError as ve:
+        print(f"\n❌ Validation error: {ve}")
+
+    except KeyboardInterrupt:
+        print("\n\n👋 Exited.")
+
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+### <a id="📄-topsis-run-topsis-py"></a>📄 `TOPSIS/run_topsis.py`
+
+**File Info:**
+- **Size**: 3.1 KB
+- **Extension**: `.py`
+- **Language**: `python`
+- **Location**: `TOPSIS/run_topsis.py`
+- **Relative Path**: `TOPSIS`
+- **Created**: 2026-06-17 20:22:50 (Asia/Damascus / GMT+03:00)
+- **Modified**: 2026-06-17 20:23:33 (Asia/Damascus / GMT+03:00)
+- **MD5**: `2518baaaeec554b513cea795a7ce49a0`
+- **SHA256**: `21979253c4fac0c84f08cad26e2595776c2b3cc0c8466bba7da6325371428c3b`
+- **Encoding**: UTF-8
+
+**File code content:**
+
+```python
+"""
+run_topsis.py — ربط طبقة TOPSIS (Layer 2) بالنظام الخبير (Layer 1)
+====================================================================
+الفكرة:
+    1. نشغّل النظام الخبير (Expert System) عادي — يفلتر الوصفات
+       ويطلع لنا "الوصفات الآمنة" بس (المسموحة طبياً وحلال ومن غير
+       حساسية).
+    2. ناخد هاي الوصفات الآمنة ونعيد ترتيبها بخوارزمية TOPSIS
+       حسب هدف المستخدم (خسارة وزن، زيادة عضل...) — بدل الاعتماد
+       على score النظام الخبير لحاله.
+
+ملاحظة: لازم تشغّل هاد الملف وهو موجود جوا مجلد TOPSIS، وجنبه
+مباشرة مجلد "Expert System" (نفس المستوى).
+"""
+
+import sys
+from pathlib import Path
+
+# ── إضافة مجلد "Expert System" لمسار البحث عشان نقدر نستورد منه ──
+EXPERT_SYSTEM_DIR = Path(__file__).resolve().parent.parent / "Expert System"
+sys.path.insert(0, str(EXPERT_SYSTEM_DIR))
+
+import pandas as pd
+
+from engine.filtering_engine import DietaryExpertSystem
+from core.user_profile import UserProfile
+
+from topsis_model import topsis_score
+
+
+def rank_with_topsis(df: pd.DataFrame, profile: UserProfile) -> pd.DataFrame:
+    """
+    رتّب الوصفات الآمنة (الناتجة من النظام الخبير) بخوارزمية TOPSIS
+    حسب هدف المستخدم.
+    """
+    df = df.copy()
+    df["_topsis_score"] = topsis_score(df, goal=profile.goal)
+    return df.sort_values("_topsis_score", ascending=False).reset_index(drop=True)
+
+
+if __name__ == "__main__":
+    # ── 1) تحميل بيانات الوصفات ──────────────────────────────
+    data_path = EXPERT_SYSTEM_DIR / "data" / "cleaned_recipes.csv"
+    print(f"تحميل البيانات من: {data_path}")
+    raw_df = pd.read_csv(data_path, low_memory=False)
+
+    # ── 2) تشغيل النظام الخبير (Layer 1) ─────────────────────
+    # train_ncf=False عشان نتخطى مشكلة NCF حالياً ونركز على TOPSIS
+    system = DietaryExpertSystem(raw_df, train_ncf=False)
+
+    profile = UserProfile(
+        age=45, height=172, weight=88, gender="male",
+        conditions=["diabetes", "hypertension"],
+        goal="weight_loss",
+    )
+
+    result = system.filter_recipes(profile)
+    safe_recipes = result["safe_recipes"]
+    print(f"\nعدد الوصفات الآمنة (بعد النظام الخبير): {len(safe_recipes)}")
+
+    # ── 3) إعادة الترتيب بـ TOPSIS (Layer 2) ─────────────────
+    ranked = rank_with_topsis(safe_recipes, profile)
+
+    print("\nأفضل 10 وصفات حسب TOPSIS:")
+    cols = ["Name", "Calories", "ProteinContent", "SugarContent", "_topsis_score"]
+    cols = [c for c in cols if c in ranked.columns]
+    print(ranked[cols].head(10).to_string(index=False))
+```
+
+---
+
+### <a id="📄-topsis-topsis-model-py"></a>📄 `TOPSIS/topsis_model.py`
+
+**File Info:**
+- **Size**: 6.23 KB
+- **Extension**: `.py`
+- **Language**: `python`
+- **Location**: `TOPSIS/topsis_model.py`
+- **Relative Path**: `TOPSIS`
+- **Created**: 2026-06-17 20:22:30 (Asia/Damascus / GMT+03:00)
+- **Modified**: 2026-06-17 20:50:14 (Asia/Damascus / GMT+03:00)
+- **MD5**: `90b1424dc8429a2654a5a20abcc0587a`
+- **SHA256**: `6f6971f6e6107c9b23b3bb49e54b1e753f6c63b339849d5fb5aac4f04d45e352`
+- **Encoding**: UTF-8
+
+**File code content:**
+
+```python
+"""
+topsis_model.py — TOPSIS Algorithm (Layer 2)
+===============================================
+خوارزمية TOPSIS (Technique for Order Preference by Similarity
+to Ideal Solution) — ترتيب الوصفات حسب عدة معايير غذائية بنفس
+الوقت، بدل الاعتماد على معادلة وزن واحدة بس.
+
+الخطوات:
+    1. بناء مصفوفة القرار (Decision Matrix) من القيم الغذائية
+    2. تطبيع المصفوفة (Vector Normalization)
+    3. تطبيق أوزان المعايير حسب هدف المستخدم
+    4. تحديد الحل الأمثل الموجب (Ideal Best) والسالب (Ideal Worst)
+    5. حساب المسافة الإقليدية من كل وصفة للحلين
+    6. حساب درجة التقارب (Closeness Score) — بين 0 و 1
+"""
+
+import numpy as np
+import pandas as pd
+from typing import Optional, List, Dict, Tuple
+
+
+# ══ المعايير المستخدمة بـ TOPSIS ═════════════════════════════
+CRITERIA: List[str] = [
+    "Calories", "ProteinContent", "FatContent",
+    "CarbohydrateContent", "FiberContent",
+    "SugarContent", "SodiumContent",
+]
+
+# ══ كل هدف له (وزن المعيار, اتجاهه) ══════════════════════════
+# "benefit" = الأعلى أحسن (زي البروتين والفايبر دايماً)
+# "cost"    = الأقل أحسن (زي السكر والصوديوم دايماً)
+# ⚠️ مهم: الاتجاه نفسه بيتغيّر حسب الهدف — مثلاً Calories
+#    "cost" بـ weight_loss (الأقل أحسن) بس "benefit" بـ
+#    weight_gain (الأكثر أحسن). هذا الفرق هو سبب التصحيح.
+GOAL_CRITERIA: Dict[str, Dict[str, Tuple[float, str]]] = {
+    "weight_loss": {
+        "Calories":            (0.25, "cost"),
+        "ProteinContent":      (0.25, "benefit"),
+        "FatContent":          (0.10, "cost"),
+        "CarbohydrateContent": (0.10, "cost"),
+        "FiberContent":        (0.15, "benefit"),
+        "SugarContent":        (0.10, "cost"),
+        "SodiumContent":       (0.05, "cost"),
+    },
+    "weight_gain": {
+        "Calories":            (0.30, "benefit"),
+        "ProteinContent":      (0.25, "benefit"),
+        "FatContent":          (0.15, "benefit"),
+        "CarbohydrateContent": (0.15, "benefit"),
+        "FiberContent":        (0.05, "cost"),
+        "SugarContent":        (0.05, "benefit"),
+        "SodiumContent":       (0.05, "cost"),
+    },
+    "muscle_gain": {
+        "Calories":            (0.15, "benefit"),
+        "ProteinContent":      (0.40, "benefit"),
+        "FatContent":          (0.10, "cost"),
+        "CarbohydrateContent": (0.15, "benefit"),
+        "FiberContent":        (0.05, "benefit"),
+        "SugarContent":        (0.10, "cost"),
+        "SodiumContent":       (0.05, "cost"),
+    },
+    "maintenance": {
+        "Calories":            (0.15, "cost"),
+        "ProteinContent":      (0.20, "benefit"),
+        "FatContent":          (0.10, "cost"),
+        "CarbohydrateContent": (0.15, "benefit"),
+        "FiberContent":        (0.20, "benefit"),
+        "SugarContent":        (0.10, "cost"),
+        "SodiumContent":       (0.10, "cost"),
+    },
+    "heart_health": {
+        "Calories":            (0.10, "cost"),
+        "ProteinContent":      (0.15, "benefit"),
+        "FatContent":          (0.20, "cost"),
+        "CarbohydrateContent": (0.05, "cost"),
+        "FiberContent":        (0.20, "benefit"),
+        "SugarContent":        (0.10, "cost"),
+        "SodiumContent":       (0.20, "cost"),
+    },
+}
+
+# افتراضي لو ما في هدف محدد أو الهدف مش موجود بالقائمة فوق
+DEFAULT_CRITERIA: Dict[str, Tuple[float, str]] = {
+    "Calories":            (0.15, "cost"),
+    "ProteinContent":      (0.20, "benefit"),
+    "FatContent":          (0.15, "cost"),
+    "CarbohydrateContent": (0.10, "cost"),
+    "FiberContent":        (0.15, "benefit"),
+    "SugarContent":        (0.15, "cost"),
+    "SodiumContent":       (0.10, "cost"),
+}
+
+
+def topsis_score(df: pd.DataFrame, goal: Optional[str] = None) -> np.ndarray:
+    """
+    احسب درجة TOPSIS لكل وصفة بـ df.
+    الناتج: مصفوفة قيم بين 0 و 1 — كل ما زادت القيمة كانت
+    الوصفة أقرب للحل المثالي (أفضل توازن بين المعايير).
+    """
+    available = [c for c in CRITERIA if c in df.columns]
+    if not available or len(df) == 0:
+        return np.zeros(len(df))
+
+    # 1) مصفوفة القرار
+    matrix = df[available].fillna(0).to_numpy(dtype=float)
+
+    # 2) التطبيع — نقسم كل عمود على جذر مجموع مربعاته
+    denom = np.sqrt((matrix ** 2).sum(axis=0))
+    denom[denom == 0] = 1.0   # تجنب القسمة على صفر
+    normalized = matrix / denom
+
+    # 3) تطبيق الأوزان حسب الهدف (الوزن والاتجاه مع بعض)
+    criteria_map = GOAL_CRITERIA.get(goal, DEFAULT_CRITERIA)
+    weights = np.array([criteria_map.get(c, (0.0, "cost"))[0] for c in available])
+    weighted = normalized * weights
+
+    # 4) الحل الأمثل الموجب والسالب لكل معيار
+    ideal_best = np.zeros(len(available))
+    ideal_worst = np.zeros(len(available))
+    for i, col in enumerate(available):
+        col_values = weighted[:, i]
+        col_type = criteria_map.get(col, (0.0, "cost"))[1]
+        if col_type == "benefit":
+            ideal_best[i] = col_values.max()
+            ideal_worst[i] = col_values.min()
+        else:  # cost
+            ideal_best[i] = col_values.min()
+            ideal_worst[i] = col_values.max()
+
+    # 5) المسافة الإقليدية عن الحل الأمثل والأسوأ
+    dist_best = np.sqrt(((weighted - ideal_best) ** 2).sum(axis=1))
+    dist_worst = np.sqrt(((weighted - ideal_worst) ** 2).sum(axis=1))
+
+    # 6) درجة التقارب النهائية
+    total_dist = dist_best + dist_worst
+    total_dist[total_dist == 0] = 1.0   # تجنب القسمة على صفر
+    closeness = dist_worst / total_dist
+
+    return closeness
+```
+
+---
 
