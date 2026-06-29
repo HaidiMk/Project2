@@ -31,7 +31,10 @@ ALLERGY_COLUMN_MAP: Dict[str, Optional[str]] = {
     "peanuts": "HasNuts",
     "soy":     "HasSoy",
     "seafood": "HasSeafood",
-    "eggs":    None,   # لا يوجد عمود جاهز — يُستخدم البحث النصي
+    "eggs":    "HasEggs",   # 🛠️ مُحدَّث: كان None (بحث نصي فقط)؛ الآن
+                            # مربوط بعمود HasEggs المُضاف عبر
+                            # add_eggs_column.py — طبقة حماية مضاعفة
+                            # (عمود + نص) مطابقة لباقي الحساسيات.
 }
 
 # ════════════════════════════════════════════════════════

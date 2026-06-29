@@ -6,10 +6,9 @@ goals_and_preferences.py — Smart Dietary Advisor v4.0 — FIXED
     - vegan: أضفنا المفقودين أيضاً
 """
 
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Dict, Any
 
-if TYPE_CHECKING:
-    from core.user_profile import UserProfile
+import numpy as np
 
 GOAL_VECTORS: Dict[str, Dict[str, Any]] = {
     "weight_loss": {
@@ -263,8 +262,9 @@ HEALTHY_DIET_STYLES: Dict[str, Dict[str, str]] = {
 
 def get_healthy_diet_style(profile: "UserProfile") -> Dict[str, str]:
     bmi = profile.bmi
-    if bmi < 18.5:   key = "underweight_style"
-    elif bmi < 25.0: key = "normal_bmi"
-    elif bmi < 30.0: key = "overweight_style"
-    else:            key = "obese_style"
+    key = str(np.select(
+        [bmi < 18.5, bmi < 25.0, bmi < 30.0],
+        ["underweight_style", "normal_bmi", "overweight_style"],
+        default="obese_style",
+    ))
     return HEALTHY_DIET_STYLES[key]

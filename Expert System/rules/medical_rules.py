@@ -382,7 +382,11 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         },
         "max_servings": 1,
         "source": "ACOG 2021 + WHO Antenatal Care Guidelines",
-        "note":   "+300 kcal/day in 2nd/3rd trimester; folate 400–800 mcg/day",
+        "note":   (
+            "+300 kcal/day in 2nd/3rd trimester; folate 400–800 mcg/day. "
+            "Low-mercury seafood (shrimp, salmon, cooked fish) limited to "
+            "2–3 servings/week per ACOG/FDA guidance."
+        ),
     },
 
     # ── الأطفال (4–12) — AAP + DGA 2025 ──────────────────

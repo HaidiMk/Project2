@@ -1,17 +1,21 @@
 """
-user_profile.py — Smart Dietary Advisor v4.0
-=============================================
-تعريف كلاس UserProfile مع جميع الحسابات الصحية:
-    - BMI وفئة الوزن
-    - BMR (معادلة Mifflin-St Jeor)
-    - السعرات اليومية والسعرات لكل وجبة
-    - الفئة العمرية (child / teen / adult / elderly)
-    - مستوى النشاط البدني (activity_level)
-    - نوع الوجبة (meal_type)
+user_profile.py — Smart Dietary Advisor v4.0 — NO-CONTROL-FLOW EDITION
+=======================================================================
+خالٍ تماماً من: if / elif / else / for / while / map / filter / reduce
+ومن التعابير الثلاثية ومن الـ comprehensions.
+
+البدائل:
+    - سلاسل if/elif المتدرجة (bmi_category) → numpy.select
+    - if بشرط واحد (bmr / daily_calories)   → فهرسة قاموس {True:..,False:..}[cond]
+    - dispatch                                → قواميس + .get()
+
+السلوك (القيم المُرجعة) مطابق تماماً للنسخة الأصلية UserProfile.
 """
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
+
+import numpy as np
 
 # ── معاملات النشاط البدني — Harris-Benedict ──────────────
 ACTIVITY_FACTORS = {
@@ -21,6 +25,11 @@ ACTIVITY_FACTORS = {
     "active":      1.725,
     "very_active": 1.9,
 }
+
+
+def _pick(cond, when_true, when_false):
+    """بديل التعبير الثلاثي."""
+    return {True: when_true, False: when_false}[bool(cond)]
 
 
 @dataclass
@@ -37,7 +46,7 @@ class UserProfile:
     preferences:    List[str]        = field(default_factory=list)
     goal:           Optional[str]    = None
     activity_level: str              = "light"
-    meal_type:      str              = "any"     # ← جديد: breakfast/lunch/dinner/any
+    meal_type:      str              = "any"     # breakfast/lunch/dinner/any
 
     # ── خصائص مشتقة ──────────────────────────────────────
     @property
@@ -47,13 +56,15 @@ class UserProfile:
 
     @property
     def bmi_category(self) -> str:
+        """تصنيف الوزن عبر numpy.select بدل سلسلة if/elif."""
         b = self.bmi
-        if b < 18.5: return "Underweight"
-        if b < 25.0: return "Normal weight"
-        if b < 30.0: return "Overweight"
-        if b < 35.0: return "Obesity Class I"
-        if b < 40.0: return "Obesity Class II"
-        return "Obesity Class III (Severe)"
+        conditions = [b < 18.5, b < 25.0, b < 30.0, b < 35.0, b < 40.0]
+        choices = [
+            "Underweight", "Normal weight", "Overweight",
+            "Obesity Class I", "Obesity Class II",
+        ]
+        return str(np.select(conditions, choices,
+                             default="Obesity Class III (Severe)"))
 
     @property
     def ideal_weight_range(self) -> Tuple[float, float]:
@@ -62,22 +73,24 @@ class UserProfile:
 
     @property
     def life_stage(self) -> str:
-        if self.age <= 12: return "child"
-        if self.age <= 17: return "teen"
-        if self.age >= 65: return "elderly"
-        return "adult"
+        """الفئة العمرية عبر numpy.select بدل سلسلة if."""
+        a = self.age
+        conditions = [a <= 12, a <= 17, a >= 65]
+        choices = ["child", "teen", "elderly"]
+        return str(np.select(conditions, choices, default="adult"))
 
     def bmr(self) -> float:
-        if self.gender == "male":
-            return 10 * self.weight + 6.25 * self.height - 5 * self.age + 5
-        return 10 * self.weight + 6.25 * self.height - 5 * self.age - 161
+        """معادلة Mifflin-St Jeor — الجزء الثابت بالجنس عبر فهرسة قاموس."""
+        common = 10 * self.weight + 6.25 * self.height - 5 * self.age
+        gender_offset = {"male": 5}.get(self.gender, -161)
+        return common + gender_offset
 
     @property
     def daily_calories(self) -> int:
         factor = ACTIVITY_FACTORS.get(self.activity_level, 1.375)
         base = self.bmr() * factor
-        if self.pregnant:
-            base += 350
+        # إضافة سعرات الحمل (350) دون if — ضرب بقيمة بوليانية
+        base = base + 350 * float(bool(self.pregnant))
         return round(base)
 
     @property
@@ -89,7 +102,7 @@ class UserProfile:
         iw = self.ideal_weight_range
         return {
             "age":            self.age,
-            "gender":         "Male" if self.gender == "male" else "Female",
+            "gender":         _pick(self.gender == "male", "Male", "Female"),
             "life_stage":     AGE_RANGE_EN.get(self.life_stage, self.life_stage),
             "height":         self.height,
             "weight":         self.weight,
@@ -100,5 +113,5 @@ class UserProfile:
             "per_meal_kcal":  self.per_meal_calories,
             "pregnant":       self.pregnant,
             "activity_level": self.activity_level,
-            "meal_type":      self.meal_type,    # ← جديد
-        }
+            "meal_type":      self.meal_type,
+              }
