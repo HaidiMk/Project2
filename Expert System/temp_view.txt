@@ -1,0 +1,428 @@
+"""
+filtering_engine.py — Smart Dietary Advisor v4.1 — NO-RECURSION EDITION
+======================================================================
+خالٍ من العودية recursion داخل هذا الملف.
+
+البدائل:
+    - التكرار على الأعمدة/القواعد    → functools.reduce داخل _fold
+    - البحث عن أول عمود موجود        → numpy masking داخل _first_present
+    - التفرّع الثنائي                → فهرسة قاموس _pick / _do
+    - any(...) على المصطلحات          → عمليات نصية موجّهة عبر numpy / pandas
+    - الفلترة بالـ DataFrame         → boolean masking vectorized
+
+السلوك مطابق منطقياً للنسخة السابقة من DietaryExpertSystem.filter_recipes.
+"""
+
+import re
+from functools import reduce
+from typing import Optional, List, Callable, Any
+
+import pandas as pd
+import numpy as np
+
+from core.user_profile import UserProfile
+from core.constants import NUTRIENT_COLS
+from rules.halal_and_allergies import HALAL_BLACKLIST
+from rules.goals_and_preferences import GOAL_VECTORS, get_healthy_diet_style
+from engine.rule_builder import get_applicable_rules
+from engine.scorer import score_recipe, explain_recipe
+from engine.ncf_model import NCFRecommender
+
+
+# ══════════════════════════════════════════════════════════════
+# أدوات بديلة عن بنى التحكم
+# ══════════════════════════════════════════════════════════════
+
+def _pick(cond, when_true, when_false):
+    """بديل التعبير الثلاثي."""
+    return {True: when_true, False: when_false}[bool(cond)]
+
+
+def _do(cond, do_true: Callable, do_false: Callable):
+    """بديل if/else تنفيذي: ينفّذ الدالة المناسبة للشرط."""
+    return {True: do_true, False: do_false}[bool(cond)]()
+
+
+def _fold(seq, acc, fn: Callable[[Any, Any], Any]):
+    """تطبيق fn على عناصر seq دون عودية ودون for/while صريحة."""
+    return reduce(lambda accumulator, item: fn(accumulator, item), list(seq), acc)
+
+
+def _first_present(df_cols, candidates: List[str]) -> Optional[str]:
+    """أول اسم من candidates موجود في الأعمدة — numpy masking دون عودية."""
+    cand = np.array(candidates, dtype=object)
+    mask = np.isin(cand, list(df_cols))
+    found = cand[mask]
+    return _pick(len(found) > 0, found[0].item(), None)
+
+
+def _has_any_terms(text: str, terms: List[str]) -> bool:
+    """هل يحتوي النص على أي مصطلح؟ — عدّ موجّه بـ numpy بدل any(...for...)."""
+    terms_arr = np.array(_pick(len(terms) > 0, terms, [""]), dtype=object)
+    terms_l = np.char.lower(terms_arr.astype(str))
+    low = str(text).lower()
+    found = np.char.find(np.full(terms_l.shape, low), terms_l)
+    return bool(np.count_nonzero(found >= 0) > 0)
+
+
+# ══════════════════════════════════════════════════════════════
+# النظام الخبير
+# ══════════════════════════════════════════════════════════════
+
+class DietaryExpertSystem:
+
+    def __init__(self, df: pd.DataFrame, train_ncf: bool = False):
+        self.df = df.copy().reset_index(drop=True)
+        self._normalize_columns()
+        self._ing_col = self._detect_ingredient_column()
+        print(f"Expert System Ready | {len(self.df):,} recipes loaded")
+
+        _do(
+            bool(self._ing_col),
+            lambda: print(f"   Ingredient column: '{self._ing_col}'"),
+            lambda: None,
+        )
+
+        # ── تحميل أو تدريب NCF ────────────────────────────
+        self.ncf = NCFRecommender()
+        need_train = train_ncf and (not self.ncf.trained)
+        no_model   = (not train_ncf) and (not self.ncf.trained)
+
+        _do(need_train, lambda: self.ncf.train(self.df, epochs=5), lambda: None)
+        _do(
+            no_model,
+            lambda: print("   NCF: no saved model — run with train_ncf=True to train."),
+            lambda: None,
+        )
+
+    # ──────────────────────────────────────────────────────
+    def _normalize_columns(self):
+        cols = NUTRIENT_COLS + ["Rating", "HealthScore"]
+        present = list(np.array(cols)[np.isin(cols, list(self.df.columns))])
+
+        def conv(_, col):
+            self.df[col] = pd.to_numeric(self.df[col], errors="coerce")
+            return None
+
+        _fold(present, None, conv)
+
+    def _detect_ingredient_column(self) -> Optional[str]:
+        return _first_present(
+            self.df.columns,
+            ["IngredientsList", "RecipeIngredientParts", "Ingredients"],
+        )
+
+    def _text_has_any(self, raw, terms: List[str]) -> bool:
+        """آمن مع NaN والقوائم — بلا if/comprehension."""
+        is_nan = isinstance(raw, float) and np.isnan(raw)
+        bad = (raw is None) or is_nan
+
+        def good():
+            text = _pick(isinstance(raw, list), " ".join(map_safe(raw)), str(raw))
+            return _has_any_terms(text, terms)
+
+        return {True: (lambda: False), False: good}[bad]()
+
+    def _build_name_pattern(self, terms: List[str]) -> str:
+        """نمط regex من المصطلحات الأطول من حرفين — بلا comprehension."""
+        arr = np.array(_pick(len(terms) > 0, terms, []), dtype=object).astype(str)
+        keep = np.array(list(np.char.str_len(arr) > 2))
+        filtered = arr[keep].tolist()
+        return _join_escaped(filtered, word_boundary=True, escape=True)
+
+    # ══════════════════════════════════════════════════════
+    def filter_recipes(self, profile: UserProfile) -> dict:
+        rules = get_applicable_rules(profile)
+        df    = self.df.copy()
+
+        # ══ 0: استبعاد وصفات الحيوانات ════════════════════
+        PET_RECIPE_BLACKLIST = [
+            "for dogs", "for cats", "for puppies", "for kittens",
+            "for your dog", "for your cat", "for your pet",
+            "dog treats", "cat treats", "dog food", "cat food",
+            "pet treats", "pet food", "doggie", "for horses",
+        ]
+        df = _filter_name_contains(df, PET_RECIPE_BLACKLIST, escape=True)
+
+        # ══ 1: فلتر الحلال (المكونات) ═════════════════════
+        df = _do(
+            bool(self._ing_col),
+            lambda: _filter_ing(df, self._ing_col, HALAL_BLACKLIST, self._text_has_any),
+            lambda: df,
+        )
+
+        # ══ 1ب: فلتر الحلال (الاسم) ═══════════════════════
+        HALAL_NAME_BLACKLIST = [
+            "pork", "bacon", "ham", "lard",
+            "pepperoni", "salami", "prosciutto", "pancetta",
+            "chorizo", "pig", "swine",
+            "wine", "beer", "alcohol", "vodka", "rum", "gin",
+            "whiskey", "whisky", "champagne", "liqueur",
+            "brandy", "tequila", "sake", "bourbon",
+        ]
+        df = _filter_name_contains(df, HALAL_NAME_BLACKLIST, word_boundary=True)
+
+        # ══ 2: أعمدة الحساسيات ════════════════════════════
+        def drop_allergy(d, col):
+            present = col in d.columns
+            return _pick(present, d[d.get(col) == False], d)
+
+        df = _fold(rules["allergy_filters"], df, drop_allergy)
+
+        # ══ 3: الحدود الرقمية ═════════════════════════════
+        df = _fold(
+            list(rules["numeric_rules"].items()),
+            df,
+            _apply_numeric_rule,
+        )
+
+        # ══ 4: تقييد البروتين غير الواقعي ═════════════════
+        df = _do(
+            "ProteinContent" in df.columns,
+            lambda: df[df["ProteinContent"] <= 80],
+            lambda: df,
+        )
+
+        # ══ 4ب: فلترة نوع الوجبة ══════════════════════════
+        meal_type = getattr(profile, "meal_type", "any")
+        df = _apply_meal_filter(df, meal_type)
+
+        # ══ 5: قائمة الممنوعات الصارمة ════════════════════
+        strict_blocked = list(set(
+            rules.get("strict_block", []) + rules.get("allergy_blocked", [])
+        ))
+        has_strict = len(strict_blocked) > 0
+
+        df = _do(
+            has_strict and bool(self._ing_col),
+            lambda: _filter_ing(df, self._ing_col, strict_blocked, self._text_has_any),
+            lambda: df,
+        )
+
+        # ══ 5ب: فلترة الاسم بالممنوعات ════════════════════
+        df = _do(
+            has_strict and ("Name" in df.columns),
+            lambda: _filter_name_pattern(df, self._build_name_pattern(strict_blocked)),
+            lambda: df,
+        )
+
+        # ══ 6: فلتر GERD على الاسم ════════════════════════
+        gerd_on = ("gerd" in profile.conditions) and ("Name" in df.columns)
+        gerd_blist = [
+            "cocktail", "martini", "mimosa", "margarita", "daiquiri",
+            "mojito", "sangria", "citrus", "sour",
+        ]
+        df = _do(
+            gerd_on,
+            lambda: _filter_name_contains(df, gerd_blist, escape=True),
+            lambda: df,
+        )
+
+        # ══ 7: السعرات المستهدفة ══════════════════════════
+        base_cal = profile.per_meal_calories
+        goal_ok = bool(profile.goal) and (profile.goal in GOAL_VECTORS)
+        offset = GOAL_VECTORS.get(_pick(goal_ok, profile.goal, ""), {}).get(
+            "target_calorie_offset", 0
+        )
+        target_cal = _pick(goal_ok, max(200, base_cal + offset), base_cal)
+
+        # ══ 8: تقييم Expert System ════════════════════════
+        preferred = rules.get("preferred_ingredients", [])
+        df = df.copy()
+        df["_expert_score"] = df.apply(
+            lambda r: score_recipe(
+                r, profile.goal, target_cal, preferred, self._ing_col, meal_type
+            ),
+            axis=1,
+        )
+
+        # ══ 8ب: دمج NCF ═══════════════════════════════════
+        ncf_scores = self.ncf.predict_scores(df, goal=profile.goal)
+        ncf_ok = (
+            self.ncf.trained
+            and (ncf_scores is not None)
+            and (len(ncf_scores) == len(df))
+        )
+
+        def with_ncf():
+            d = df.copy()
+            d["_ncf_score"]   = ncf_scores
+            d["_final_score"] = d["_expert_score"] * 0.7 + d["_ncf_score"] * 0.3
+            return d, True
+
+        def without_ncf():
+            d = df.copy()
+            d["_final_score"] = d["_expert_score"]
+            return d, False
+
+        df, ncf_active = _do(ncf_ok, with_ncf, without_ncf)
+
+        df = df.sort_values("_final_score", ascending=False)
+        df["_reason"] = df.apply(lambda r: explain_recipe(r, profile.goal), axis=1)
+
+        drop_cols = ["_expert_score", "_final_score"] + _pick(
+            ncf_active, ["_ncf_score"], []
+        )
+        df = df.drop(columns=drop_cols)
+
+        # ══ 9: التحذيرات ══════════════════════════════════
+        warnings = list(rules["conflict_messages"])
+
+        # تحذير غياب نوع الوجبة
+        meal_check = _do(
+            (meal_type != "any") and ("MealType" in self.df.columns),
+            lambda: len(self.df[
+                self.df["MealType"].fillna("").str.lower().str.contains(
+                    meal_type, na=False
+                )
+            ]),
+            lambda: -1,   # -1 يعني "لا فحص" → لا تحذير
+        )
+        warnings = warnings + _pick(
+            meal_check == 0,
+            [f"No '{meal_type}' recipes found — showing all meal types."],
+            [],
+        )
+
+        # تحذير soft_block
+        soft_warned = rules.get("soft_block", [])
+        has_soft = len(soft_warned) > 0
+        ellipsis = _pick(len(soft_warned) > 5, "...", "")
+        warnings = warnings + _pick(
+            has_soft,
+            [f"Caution: not ideal but not blocked: "
+             f"{', '.join(soft_warned[:5])}{ellipsis}"],
+            [],
+        )
+
+        # تحذير قلة النتائج
+        warnings = warnings + _pick(
+            len(df) < 5,
+            [f"Only {len(df)} recipes match all restrictions."],
+            [],
+        )
+
+        # نمط الأكل الصحي
+        no_med = (not profile.conditions) and (not profile.pregnant)
+        healthy_style = _do(
+            no_med,
+            lambda: get_healthy_diet_style(profile),
+            lambda: None,
+        )
+
+        return {
+            "safe_recipes":         df.reset_index(drop=True),
+            "total_safe":           len(df),
+            "total_original":       len(self.df),
+            "filter_rate":          round(len(df) / max(len(self.df), 1) * 100, 1),
+            "rules_applied":        rules["numeric_rules"],
+            "blocked_list":         strict_blocked[:40],
+            "warnings":             warnings,
+            "notes":                rules["notes"],
+            "healthy_style":        healthy_style,
+            "profile_summary":      profile.summary(),
+            "target_meal_calories": target_cal,
+            "meal_type":            meal_type,
+            "ncf_active":           ncf_active,
+        }
+
+
+# ══════════════════════════════════════════════════════════════
+# دوال فلترة مساعدة (vectorized — بلا حلقات صريحة)
+# ══════════════════════════════════════════════════════════════
+
+def map_safe(raw):
+    """تحويل عناصر القائمة لنصوص دون map/comprehension (numpy)."""
+    return np.array(raw, dtype=object).astype(str).tolist()
+
+
+
+
+def _join_escaped(terms, word_boundary=False, escape=True):
+    """ابنِ نمط regex من قائمة مصطلحات بلا comprehension. الفارغ → ''."""
+    def build():
+        arr = np.array(terms, dtype=object).astype(str)
+        low = np.char.lower(arr)
+        esc = _pick(escape, np.frompyfunc(re.escape, 1, 1)(low).astype(str), low)
+        bounded = _pick(
+            word_boundary,
+            np.char.add(np.char.add(r"\b", esc), r"\b"),
+            esc,
+        )
+        return "|".join(bounded.tolist())
+
+    return {True: build, False: (lambda: "")}[len(terms) > 0]()
+
+
+def _filter_name_contains(df, terms, escape=True, word_boundary=False):
+    """استبعد الصفوف التي يحوي اسمها أياً من المصطلحات."""
+    def do():
+        pattern = _join_escaped(terms, word_boundary=word_boundary, escape=escape)
+        mask = df["Name"].fillna("").str.lower().str.contains(
+            pattern, regex=True, na=False
+        )
+        return df[~mask]
+
+    return _do("Name" in df.columns, do, lambda: df)
+
+
+def _filter_name_pattern(df, pattern: str):
+    """استبعد بالنمط الجاهز (قد يكون فارغاً → لا فلترة)."""
+    def do():
+        mask = df["Name"].fillna("").str.lower().str.contains(
+            pattern, regex=True, na=False
+        )
+        return df[~mask]
+
+    return _do(len(pattern) > 0, do, lambda: df)
+
+
+def _filter_ing(df, ing_col, terms, text_has_any):
+    """استبعد الصفوف التي تحوي مكوّناتها أياً من المصطلحات."""
+    mask = df[ing_col].apply(lambda r: text_has_any(r, terms))
+    return df[~mask]
+
+
+def _apply_numeric_rule(df, item):
+    """طبّق قاعدة رقمية واحدة (col, (op, val)) عبر boolean masking."""
+    col, rule = item
+    valid = (
+        (col in df.columns)
+        and isinstance(rule, tuple)
+        and (len(rule) >= 2)
+    )
+
+    def do():
+        op, val = rule[0], rule[1]
+        is_between = (op == "between")
+
+        def apply_op():
+            fill = _pick(op.startswith("<"), 9999, 0)
+            series = df[col].fillna(fill)
+            ops = {
+                "<=": lambda: series <= val,
+                ">=": lambda: series >= val,
+                "<":  lambda: series < val,
+                ">":  lambda: series > val,
+            }
+            mask = ops.get(op, lambda: pd.Series([True] * len(df), index=df.index))()
+            return df[mask]
+
+        return {True: (lambda: df), False: apply_op}[is_between]()
+
+    return {True: do, False: (lambda: df)}[valid]()
+
+
+def _apply_meal_filter(df, meal_type: str):
+    """فلترة نوع الوجبة مع تراجع (fallback) لو لا نتائج."""
+    active = (meal_type != "any") and ("MealType" in df.columns)
+
+    def do():
+        mask = df["MealType"].fillna("").str.lower().str.contains(
+            meal_type, na=False
+        )
+        df_meal = df[mask]
+        # لو فيه نتائج نأخذها، وإلا نُبقي df الأصلي
+        return _pick(len(df_meal) > 0, df_meal, df)
+
+    return {True: do, False: (lambda: df)}[active]()
