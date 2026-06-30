@@ -113,6 +113,42 @@ PET_RECIPE_PATTERN = (
 
 
 # ══════════════════════════════════════════════════════════════
+# نمط استبعاد "وصفات" غير غذائية (عناية بالبشرة، علاجات موضعية)
+# ══════════════════════════════════════════════════════════════
+# 🛠️ تطوّر النمط عبر فحص شامل لكل 384,541 وصفة بالبيانات الحقيقية
+# (لا تخمين): "Victorian Facial Scrub" كانت الاكتشاف الأول، والفحص
+# الشامل اللاحق صنّف كل كلمة مشتبه بها بدقة:
+#   ✅ أُبقيت (خطر حقيقي مؤكَّد بمراجعة كل تطابقاتها الفعلية):
+#      scrub, lip balm, shampoo, lotion (بصيغها المحدَّدة), vapor
+#      rub, salve, ointment, perfume, deodorant.
+#   ❌ أُزيلت بالكامل (false positive غالب جداً بالبيانات الحقيقية):
+#      "polish" (261 من 261 = الجنسية البولندية: Polish Sausage)،
+#      "candle" (كله "Candle Salad" طبق كلاسيكي بشكل شمعة)،
+#      "cologne" (اسم مدينة ألمانية: Cologne Style Potato Pancakes)،
+#      "play dough/playdough" (كله "Edible" صراحة)، "slime" (مشروبات
+#      بأسماء مرحة كـ"Slime Smoothie")، "cleaner"/"soap"/"potpourri"
+#      (نسبة الأطباق المجازية فيها أعلى بكثير من المنتجات الحقيقية،
+#      فاستبعادها بالكامل أسلم من خطر false positive أوسع).
+NON_FOOD_TERMS = (
+    r"scrub|face mask|facial mask|lip balm|lip scrub"
+    r"|bath bomb|bath salt|bath oil|body butter|body lotion"
+    r"|hair mask|hair treatment|shampoo"
+    r"|facial (?:cleansing )?lotion|suntan lotion|moisturizing lotion"
+    r"|healing lotion|oil lotion"
+    r"|cough drop|vapor rub|salve|ointment"
+    r"|solid perfume|deodorant"
+)
+# كلمات مؤشّر طعام: لو ظهرت بنفس الاسم، فالوصفة طبق إنسان حقيقي —
+# (لاحظ: "chocolate" أُزيلت عمداً من هذه القائمة، لأن "Chocolate Lip
+# Balm" يجب أن تُحجب رغم النكهة المذكورة، فهو منتج بشرة حقيقي).
+_FOOD_INDICATOR_WORDS = (
+    r"cake|cookies?|cupcakes?|brownies?|dessert|candy"
+    r"|cocktail|pie|tart|muffins?|chowder|soup|salad|sandwich|sauce|dip"
+)
+NON_FOOD_RECIPE_PATTERN = rf"\b(?:{NON_FOOD_TERMS})\b"
+
+
+# ══════════════════════════════════════════════════════════════
 # أدوات بديلة عن بنى التحكم
 # ══════════════════════════════════════════════════════════════
 
@@ -269,6 +305,40 @@ class DietaryExpertSystem:
         )
         df = df[not_pet_mask]
 
+        # ══ 0ب: استبعاد "وصفات" غير غذائية ════════════════
+        # 🛠️ إصلاح bug خطير: "Victorian Facial Scrub" (مقشّر وجه) ظهر
+        # فعلياً بنتائج إفطار حقيقية! نطبّق نفس منطق المؤشر الغذائي
+        # المستثني (Bath Bomb Cake تبقى ظاهرة، لكن Victorian Facial
+        # Scrub المجرّدة تُحجب) بدون شرط إجرائي — عبر بناء قناعين
+        # ودمجهما بعملية منطقية واحدة.
+        matches_nonfood = df["Name"].fillna("").str.lower().str.contains(
+            NON_FOOD_RECIPE_PATTERN, regex=True, na=False
+        )
+        has_food_indicator = df["Name"].fillna("").str.lower().str.contains(
+            _FOOD_INDICATOR_WORDS, regex=True, na=False
+        )
+        not_nonfood_mask = ~(matches_nonfood & ~has_food_indicator)
+        df = df[not_nonfood_mask]
+
+        # ══ 0ج: استبعاد إضافي عبر تصنيف KeywordsList الأصلي ══
+        # 🛠️ إصلاح bug تاسع وعشرون (مكتشَف بفحص شامل لبيانات حقيقية):
+        # 8 من 10 وصفات فحصناها (Avocado Mask، Honey Hair Softener،
+        # Cranberry Lip Gloss...) كانت تفلت تماماً من فحص الاسم أعلاه
+        # لأن أسماءها بريئة ظاهرياً ولا تحتوي أي كلمة من NON_FOOD_TERMS
+        # — لكن مصدر البيانات نفسه صنّفها مسبقاً بعمود KeywordsList
+        # بقيمة "bath/beauty" صراحة، وهو دليل قاطع لا يعتمد على تخمين
+        # نمط نصي للاسم. هذا فحص مستقل (طبقة حماية ثانية)، يعمل حتى
+        # لو KeywordsList غير موجود بالبيانات (يُتخطّى بأمان).
+        has_keywords_col = "KeywordsList" in df.columns
+        NON_FOOD_KEYWORD_PATTERN = r"bath/beauty"
+
+        def exclude_by_keywords():
+            kw = df["KeywordsList"].fillna("").astype(str).str.lower()
+            matches_kw = kw.str.contains(NON_FOOD_KEYWORD_PATTERN, regex=True, na=False)
+            return df[~matches_kw]
+
+        df = _do(has_keywords_col, exclude_by_keywords, lambda: df)
+
         # ══ 1: فلتر الحلال (المكونات) ═════════════════════
         df = _do(
             bool(self._ing_col),
@@ -301,6 +371,32 @@ class DietaryExpertSystem:
             return d[mask]
 
         df = _fold(rules["allergy_filters"], df, drop_allergy)
+
+        # ══ 2ب: استبعاد وصفات "مجهولة المكونات" لمستخدمي الحساسية ══
+        # 🛠️ إصلاح bug خطير (مكتشَف بفحص شامل للبيانات الحقيقية):
+        # 1,232 وصفة (0.32%) عمود IngredientsList فيها فارغ تماماً
+        # ('[]')، وتأكَّد بالفحص أن أعمدة الحماية الأولى (HasLactose،
+        # HasGluten، HasNuts، HasSoy، HasSeafood) محسوبة من نفس
+        # المصدر الفارغ، فكلها False بنسبة 100% لهذه الوصفات بالذات —
+        # بينما التوزيع الطبيعي لكامل القاعدة يقول 59.5% فيها حليب،
+        # 29.6% فيها غلوتين، إلخ. يعني كلا طبقتي الحماية (العمود +
+        # الفحص النصي) معطّلتان معاً، فلا توجد أي وسيلة موثوقة للتأكد
+        # من خلو هذه الوصفات من مسبّبات الحساسية. الحل الأسلم طبياً:
+        # نستبعدها بالكامل، لكن فقط لمستخدم لديه حساسية واحدة على
+        # الأقل (لا نخسر هذه الوصفات بلا داعٍ لمن لا يحتاج الحماية).
+        has_any_allergy = len(rules["allergy_filters"]) > 0
+        ingredients_present = bool(self._ing_col) and (self._ing_col in df.columns)
+
+        def exclude_unknown_ingredients():
+            raw = df[self._ing_col].fillna("").astype(str).str.strip()
+            is_empty = raw.isin(["", "[]", "['']"])
+            return df[~is_empty]
+
+        df = _do(
+            has_any_allergy and ingredients_present,
+            exclude_unknown_ingredients,
+            lambda: df,
+        )
 
         # ══ 3: الحدود الرقمية ═════════════════════════════
         df = _fold(
