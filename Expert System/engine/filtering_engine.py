@@ -1,23 +1,4 @@
-"""
-filtering_engine.py — Smart Dietary Advisor v4.1 — NO-RECURSION EDITION (FIXED)
-================================================================================
-خالٍ من العودية recursion داخل هذا الملف.
 
-البدائل:
-    - التكرار على الأعمدة/القواعد    → functools.reduce داخل _fold
-    - البحث عن أول عمود موجود        → numpy masking داخل _first_present
-    - التفرّع الثنائي                → فهرسة قاموس _pick / _do
-    - any(...) على المصطلحات          → عمليات نصية موجّهة عبر numpy / pandas
-    - الفلترة بالـ DataFrame         → boolean masking vectorized
-
-السلوك مطابق منطقياً للنسخة السابقة من DietaryExpertSystem.filter_recipes.
-
-🛠️ إصلاح (الإصدار المُصحَّح): _first_present كانت تستدعي .item() على
-   found[0] الذي هو عنصر نصي عادي (str) ناتج من np.array(..., dtype=object)،
-   و str لا تملك method اسمها .item() (هذه خاصة بـ numpy scalar/torch tensor
-   فقط) — كانت ترمي AttributeError فوراً عند أول استدعاء للنظام. الحل:
-   إزالة .item() لأنها غير ضرورية أساساً، found[0] جاهز كـ str مباشرة.
-"""
 
 import re
 from functools import reduce
@@ -36,40 +17,15 @@ from engine.scorer import score_recipe, explain_recipe
 from engine.ncf_model import NCFRecommender
 
 
-# ══════════════════════════════════════════════════════════════
-# خريطة ترجمة خيار الواجهة → القيمة الحقيقية بعمود MealType
-# ══════════════════════════════════════════════════════════════
-# 🛠️ مكتشَفة بالاستخدام الفعلي: عمود MealType بالبيانات الحقيقية
-# يحوي فقط 4 قيم: MainDish, Other, Drink, Breakfast. لا توجد قيمة
-# "lunch" أو "dinner" حرفياً. الترجمة هنا توحَّد بين هذا الملف
-# وscorer.py (انظر _meal_type_score هناك) لضمان عدم تناقض الفلتر
-# مع نظام التقييم.
+
 MEAL_TYPE_DATA_MAP = {
-    "breakfast": "Breakfast",  # موجودة أصلاً بالبيانات، تطابق مباشرة
-    "lunch":     "MainDish",   # لا يوجد تصنيف غداء مستقل بالبيانات
-    "dinner":    "MainDish",   # لا يوجد تصنيف عشاء مستقل بالبيانات
+    "breakfast": "Breakfast",  
+    "lunch":     "MainDish",   
+    "dinner":    "MainDish",   
 }
 
 
-# ══════════════════════════════════════════════════════════════
-# نمط استبعاد وصفات الحيوانات — regex خام، تغطية شاملة
-# ══════════════════════════════════════════════════════════════
-# 🛠️ تطوّر النمط عبر مرحلتين (كل مرحلة مكتشَفة بالاستخدام الفعلي
-# والفحص المنهجي):
-#   مرحلة 1: غطّت فقط Dog/Cat/Puppy/Kitten/Pet/Horse بعبارات متلاصقة
-#   دقيقة جداً — فاتت "Dog Biscuit Treats" (كلمة بالمنتصف).
-#   مرحلة 2 (هذه): توسيع شامل لكل الحيوانات الشائعة بوصفات "طعام
-#   حيوانات" حقيقية على الإنترنت — مقسَّمة لفئتين:
-#     PET_ONLY_ANIMALS: حيوانات أليفة/منزلية نادراً تكون اسم طبق
-#       إنسان (كلاب، قطط، خيول، طيور زينة، هامستر، خنازير غينيا،
-#       أرانب، نمس، سلاحف، سحالي) — تُحجب بمجرد وجود سياق "طعام/علاج"
-#       بجانبها بالجملة.
-#     SENSITIVE_ANIMALS: حيوانات هي أيضاً أطعمة إنسان شائعة جداً
-#       (سمك، دجاج، خنزير، بقر) — تُحجب فقط بسياق صريح جداً لا يُستخدم
-#       أبداً بأسماء أطباق إنسان (kibble/pellets/flakes/treats، أو
-#       تحديداً "fish food")، مع استثناء صريح لـ"biscuits" (أطباق
-#       إنسان حقيقية شهيرة مثل "Chicken Biscuits") و"chow" (حلوى
-#       إنسان شهيرة "Puppy Chow") من قوائم السياق المشترك.
+
 PET_ONLY_ANIMALS = (
     r"dogs?|puppy|puppies|doggie|doggy"
     r"|cats?|kittens?|kitty"
@@ -85,18 +41,7 @@ STANDALONE_PET_WORDS = r"doggie|doggy|kitty|livestock|goldfish"
 SENSITIVE_ANIMALS = r"fish|chicken|pigs?|cows?|cattle"
 _ANIMAL_CONTEXT = r"treats?|foods?|biscuits?|training|kibble|pellets?|flakes?|feeds?"
 
-# 🛠️ تطوّر النمط عبر فحص شامل بمئات السيناريوهات (كل خطوة مكتشَفة
-# بفحص منهجي فعلي، لا تخمين):
-#   - \W* للفواصل: يسمح بترقيم بين الحيوان والسياق (شرطة، فاصلة،
-#     نقطتين، تعجب) لا فقط مسافة واحدة صريحة.
-#   - (?:'s)? للملكية: "Dog's"، "Dogs'" تُطابَق بشكل صحيح.
-#   - (?:\w+\W+){0,2} لكلمتين وسط: يغطي "Dog's Favorite Birthday
-#     Treats" أو "Chick Starter Feed"، حد أقصى كلمتين لمنع تسرّب
-#     مفرط لاحتمالات substring بعيدة.
-#   - ⚠️ \b صريح فوراً بعد كل اسم حيوان (قبل الملكية/الفاصل) — إصلاح
-#     حاسم: غيابه كان يسمح بالتحام حرفي مباشر، فـ"chick" التحمت بـ
-#     "en" من "chicken" وحوّلت "Chicken Biscuits" (طبق إنسان حقيقي
-#     شهير) لتسرّب محجوب بالخطأ. \b هنا يضمن فصلاً حقيقياً للكلمة.
+
 _POSSESSIVE = r"(?:'s)?"
 _SEP = r"[\W]+"
 _OPTIONAL_MIDDLE_WORDS = r"(?:\w+\W+){0,2}"
@@ -112,23 +57,7 @@ PET_RECIPE_PATTERN = (
 )
 
 
-# ══════════════════════════════════════════════════════════════
-# نمط استبعاد "وصفات" غير غذائية (عناية بالبشرة، علاجات موضعية)
-# ══════════════════════════════════════════════════════════════
-# 🛠️ تطوّر النمط عبر فحص شامل لكل 384,541 وصفة بالبيانات الحقيقية
-# (لا تخمين): "Victorian Facial Scrub" كانت الاكتشاف الأول، والفحص
-# الشامل اللاحق صنّف كل كلمة مشتبه بها بدقة:
-#   ✅ أُبقيت (خطر حقيقي مؤكَّد بمراجعة كل تطابقاتها الفعلية):
-#      scrub, lip balm, shampoo, lotion (بصيغها المحدَّدة), vapor
-#      rub, salve, ointment, perfume, deodorant.
-#   ❌ أُزيلت بالكامل (false positive غالب جداً بالبيانات الحقيقية):
-#      "polish" (261 من 261 = الجنسية البولندية: Polish Sausage)،
-#      "candle" (كله "Candle Salad" طبق كلاسيكي بشكل شمعة)،
-#      "cologne" (اسم مدينة ألمانية: Cologne Style Potato Pancakes)،
-#      "play dough/playdough" (كله "Edible" صراحة)، "slime" (مشروبات
-#      بأسماء مرحة كـ"Slime Smoothie")، "cleaner"/"soap"/"potpourri"
-#      (نسبة الأطباق المجازية فيها أعلى بكثير من المنتجات الحقيقية،
-#      فاستبعادها بالكامل أسلم من خطر false positive أوسع).
+
 NON_FOOD_TERMS = (
     r"scrub|face mask|facial mask|lip balm|lip scrub"
     r"|bath bomb|bath salt|bath oil|body butter|body lotion"
@@ -138,9 +67,7 @@ NON_FOOD_TERMS = (
     r"|cough drop|vapor rub|salve|ointment"
     r"|solid perfume|deodorant"
 )
-# كلمات مؤشّر طعام: لو ظهرت بنفس الاسم، فالوصفة طبق إنسان حقيقي —
-# (لاحظ: "chocolate" أُزيلت عمداً من هذه القائمة، لأن "Chocolate Lip
-# Balm" يجب أن تُحجب رغم النكهة المذكورة، فهو منتج بشرة حقيقي).
+
 _FOOD_INDICATOR_WORDS = (
     r"cake|cookies?|cupcakes?|brownies?|dessert|candy"
     r"|cocktail|pie|tart|muffins?|chowder|soup|salad|sandwich|sauce|dip"
@@ -148,9 +75,7 @@ _FOOD_INDICATOR_WORDS = (
 NON_FOOD_RECIPE_PATTERN = rf"\b(?:{NON_FOOD_TERMS})\b"
 
 
-# ══════════════════════════════════════════════════════════════
-# أدوات بديلة عن بنى التحكم
-# ══════════════════════════════════════════════════════════════
+
 
 def _pick(cond, when_true, when_false):
     """بديل التعبير الثلاثي."""
@@ -220,9 +145,6 @@ def _has_any_terms(text: str, terms: List[str]) -> bool:
     return bool(re.search(pattern, str(text).lower()))
 
 
-# ══════════════════════════════════════════════════════════════
-# النظام الخبير
-# ══════════════════════════════════════════════════════════════
 
 class DietaryExpertSystem:
 
@@ -238,7 +160,6 @@ class DietaryExpertSystem:
             lambda: None,
         )
 
-        # ── تحميل أو تدريب NCF ────────────────────────────
         self.ncf = NCFRecommender()
         need_train = train_ncf and (not self.ncf.trained)
         no_model   = (not train_ncf) and (not self.ncf.trained)
@@ -250,7 +171,7 @@ class DietaryExpertSystem:
             lambda: None,
         )
 
-    # ──────────────────────────────────────────────────────
+   
     def _normalize_columns(self):
         cols = NUTRIENT_COLS + ["Rating", "HealthScore"]
         present = list(np.array(cols)[np.isin(cols, list(self.df.columns))])
@@ -285,32 +206,18 @@ class DietaryExpertSystem:
         filtered = arr[keep].tolist()
         return _join_escaped(filtered, word_boundary=True, escape=True)
 
-    # ══════════════════════════════════════════════════════
+   
     def filter_recipes(self, profile: UserProfile) -> dict:
         rules = get_applicable_rules(profile)
         df    = self.df.copy()
 
-        # ══ 0: استبعاد وصفات الحيوانات ════════════════════
-        # 🛠️ إصلاح bug خطير: القائمة الأصلية تحتوي عبارات متلاصقة
-        # دقيقة جداً ("dog treats") لا تطابق أسماء حقيقية بها كلمة
-        # وصفية بالمنتصف مثل "Microwave Dog Biscuit Treats" — ظهرت
-        # فعلياً بنتائج حقيقية لمستخدمة حامل! الحل: نمط regex خام
-        # (PET_RECIPE_PATTERN أدناه) يطابق "dog"/"cat" متبوعة بأي من
-        # كلمات سياق الحيوانات (biscuit/treat/food/training) ضمن نفس
-        # الجملة لا بالتلاصق الحرفي فقط، مع حماية صريحة لأسماء طعام
-        # إنسان شهيرة تحوي "dog" (Hot Dog، Corn Dog) أو "cat" (Cat's
-        # Tongue Cookies) عبر عدم مطابقتها أصلاً بالنمط الجديد.
+        
         not_pet_mask = ~df["Name"].fillna("").str.lower().str.contains(
             PET_RECIPE_PATTERN, regex=True, na=False
         )
         df = df[not_pet_mask]
 
-        # ══ 0ب: استبعاد "وصفات" غير غذائية ════════════════
-        # 🛠️ إصلاح bug خطير: "Victorian Facial Scrub" (مقشّر وجه) ظهر
-        # فعلياً بنتائج إفطار حقيقية! نطبّق نفس منطق المؤشر الغذائي
-        # المستثني (Bath Bomb Cake تبقى ظاهرة، لكن Victorian Facial
-        # Scrub المجرّدة تُحجب) بدون شرط إجرائي — عبر بناء قناعين
-        # ودمجهما بعملية منطقية واحدة.
+        
         matches_nonfood = df["Name"].fillna("").str.lower().str.contains(
             NON_FOOD_RECIPE_PATTERN, regex=True, na=False
         )
@@ -320,15 +227,7 @@ class DietaryExpertSystem:
         not_nonfood_mask = ~(matches_nonfood & ~has_food_indicator)
         df = df[not_nonfood_mask]
 
-        # ══ 0ج: استبعاد إضافي عبر تصنيف KeywordsList الأصلي ══
-        # 🛠️ إصلاح bug تاسع وعشرون (مكتشَف بفحص شامل لبيانات حقيقية):
-        # 8 من 10 وصفات فحصناها (Avocado Mask، Honey Hair Softener،
-        # Cranberry Lip Gloss...) كانت تفلت تماماً من فحص الاسم أعلاه
-        # لأن أسماءها بريئة ظاهرياً ولا تحتوي أي كلمة من NON_FOOD_TERMS
-        # — لكن مصدر البيانات نفسه صنّفها مسبقاً بعمود KeywordsList
-        # بقيمة "bath/beauty" صراحة، وهو دليل قاطع لا يعتمد على تخمين
-        # نمط نصي للاسم. هذا فحص مستقل (طبقة حماية ثانية)، يعمل حتى
-        # لو KeywordsList غير موجود بالبيانات (يُتخطّى بأمان).
+        
         has_keywords_col = "KeywordsList" in df.columns
         NON_FOOD_KEYWORD_PATTERN = r"bath/beauty"
 
@@ -339,14 +238,14 @@ class DietaryExpertSystem:
 
         df = _do(has_keywords_col, exclude_by_keywords, lambda: df)
 
-        # ══ 1: فلتر الحلال (المكونات) ═════════════════════
+       
         df = _do(
             bool(self._ing_col),
             lambda: _filter_ing(df, self._ing_col, HALAL_BLACKLIST, self._text_has_any),
             lambda: df,
         )
 
-        # ══ 1ب: فلتر الحلال (الاسم) ═══════════════════════
+        
         HALAL_NAME_BLACKLIST = [
             "pork", "bacon", "ham", "lard",
             "pepperoni", "salami", "prosciutto", "pancetta",
@@ -357,14 +256,7 @@ class DietaryExpertSystem:
         ]
         df = _filter_name_contains(df, HALAL_NAME_BLACKLIST, word_boundary=True)
 
-        # ══ 2: أعمدة الحساسيات ════════════════════════════
-        # 🛠️ إصلاح: _pick تُقيّم كل الوسيطين فوراً (ليست lambda)، لذلك
-        # كانت d[d.get(col) == False] تُنفَّذ حتى عندما col غير موجود
-        # بالأعمدة (present=False) — وبما أن d.get(col) ترجع None عند
-        # الغياب، فـ None == False ترجع False (scalar)، فيحاول d[False]
-        # البحث عن عمود اسمه "False" فيكرّش بـ KeyError. الحل: نبني
-        # القناع كقيمة واحدة سليمة دائماً (Series صحيحة بكل الأحوال)
-        # بدل تمرير تعبير d[...] جاهز لـ _pick.
+        
         def drop_allergy(d, col):
             present = col in d.columns
             mask = d[col] == False if present else pd.Series(True, index=d.index)
@@ -372,18 +264,7 @@ class DietaryExpertSystem:
 
         df = _fold(rules["allergy_filters"], df, drop_allergy)
 
-        # ══ 2ب: استبعاد وصفات "مجهولة المكونات" لمستخدمي الحساسية ══
-        # 🛠️ إصلاح bug خطير (مكتشَف بفحص شامل للبيانات الحقيقية):
-        # 1,232 وصفة (0.32%) عمود IngredientsList فيها فارغ تماماً
-        # ('[]')، وتأكَّد بالفحص أن أعمدة الحماية الأولى (HasLactose،
-        # HasGluten، HasNuts، HasSoy، HasSeafood) محسوبة من نفس
-        # المصدر الفارغ، فكلها False بنسبة 100% لهذه الوصفات بالذات —
-        # بينما التوزيع الطبيعي لكامل القاعدة يقول 59.5% فيها حليب،
-        # 29.6% فيها غلوتين، إلخ. يعني كلا طبقتي الحماية (العمود +
-        # الفحص النصي) معطّلتان معاً، فلا توجد أي وسيلة موثوقة للتأكد
-        # من خلو هذه الوصفات من مسبّبات الحساسية. الحل الأسلم طبياً:
-        # نستبعدها بالكامل، لكن فقط لمستخدم لديه حساسية واحدة على
-        # الأقل (لا نخسر هذه الوصفات بلا داعٍ لمن لا يحتاج الحماية).
+        
         has_any_allergy = len(rules["allergy_filters"]) > 0
         ingredients_present = bool(self._ing_col) and (self._ing_col in df.columns)
 
@@ -398,25 +279,25 @@ class DietaryExpertSystem:
             lambda: df,
         )
 
-        # ══ 3: الحدود الرقمية ═════════════════════════════
+       
         df = _fold(
             list(rules["numeric_rules"].items()),
             df,
             _apply_numeric_rule,
         )
 
-        # ══ 4: تقييد البروتين غير الواقعي ═════════════════
+        
         df = _do(
             "ProteinContent" in df.columns,
             lambda: df[df["ProteinContent"] <= 80],
             lambda: df,
         )
 
-        # ══ 4ب: فلترة نوع الوجبة ══════════════════════════
+        
         meal_type = getattr(profile, "meal_type", "any")
         df = _apply_meal_filter(df, meal_type)
 
-        # ══ 5: قائمة الممنوعات الصارمة ════════════════════
+        
         strict_blocked = list(set(
             rules.get("strict_block", []) + rules.get("allergy_blocked", [])
         ))
@@ -428,14 +309,14 @@ class DietaryExpertSystem:
             lambda: df,
         )
 
-        # ══ 5ب: فلترة الاسم بالممنوعات ════════════════════
+       
         df = _do(
             has_strict and ("Name" in df.columns),
             lambda: _filter_name_pattern(df, self._build_name_pattern(strict_blocked)),
             lambda: df,
         )
 
-        # ══ 6: فلتر GERD على الاسم ════════════════════════
+       
         gerd_on = ("gerd" in profile.conditions) and ("Name" in df.columns)
         gerd_blist = [
             "cocktail", "martini", "mimosa", "margarita", "daiquiri",
@@ -447,7 +328,7 @@ class DietaryExpertSystem:
             lambda: df,
         )
 
-        # ══ 7: السعرات المستهدفة ══════════════════════════
+       
         base_cal = profile.per_meal_calories
         goal_ok = bool(profile.goal) and (profile.goal in GOAL_VECTORS)
         offset = GOAL_VECTORS.get(_pick(goal_ok, profile.goal, ""), {}).get(
@@ -455,16 +336,7 @@ class DietaryExpertSystem:
         )
         goal_based_target = _pick(goal_ok, max(200, base_cal + offset), base_cal)
 
-        # 🛠️ إصلاح bug حساس طبياً: target_meal_calories كانت تُحسَب من
-        # الهدف الغذائي فقط، متجاهلة تماماً وجود حالة "underweight".
-        # النتيجة: _calorie_score بالـscorer كانت تُرجِّح الوصفات
-        # الأقرب للهدف العادي (مثلاً 500) حتى ضمن نطاق الفلتر الطبي
-        # الصارم (Calories>=550) — فيفضّل النظام فعلياً السعرات الأقل
-        # (560) على الأعلى (850) لمريض يحتاج أساساً سعرات أعلى لزيادة
-        # الوزن، رغم أن كلاهما يحققان الحد الأدنى المسموح. الحل: نقرأ
-        # الحد الأدنى الطبي الحقيقي من MEDICAL_RULES['underweight']
-        # (مصدر الحقيقة الوحيد، لا رقم مكرَّر يدوياً) ونرفع target_cal
-        # إليه + هامش معقول (10%) إذا كان الهدف الأصلي أقل منه.
+        
         is_underweight = "underweight" in profile.conditions
         medical_min_cal = (
             MEDICAL_RULES.get("underweight", {})
@@ -477,15 +349,8 @@ class DietaryExpertSystem:
             else goal_based_target
         )
 
-        # ══ 8: تقييم Expert System ════════════════════════
-        # 🛠️ إصلاح bug رابع عشر: عندما تُفلتر كل الوصفات (df فاضي
-        # تماماً، 0 صفوف) — وهذا وارد جداً بقيود طبية متعددة مُركّبة
-        # مثل سكري+ضغط+سمنة — فإن df.apply(...) على DataFrame فاضي
-        # يرجع DataFrame فاضي بدل Series فاضية (سلوك pandas معروف:
-        # لا يمكن تحديد بنية الناتج بدون أي صف لتنفيذ func عليه فعلياً)
-        # فيفشل df["_expert_score"] = ... بـ ValueError. الحل: نتجنّب
-        # استدعاء apply أساساً عندما df فاضي، ونُعيّن Series فاضية
-        # بنوع float مباشرة (يحافظ على نفس البنية والسلوك لاحقاً).
+       
+       
         preferred = rules.get("preferred_ingredients", [])
         df = df.copy()
         is_df_empty = len(df) == 0
@@ -499,7 +364,7 @@ class DietaryExpertSystem:
             )
         )
 
-        # ══ 8ب: دمج NCF ═══════════════════════════════════
+       
         ncf_scores = self.ncf.predict_scores(df, goal=profile.goal)
         ncf_ok = (
             self.ncf.trained
@@ -521,8 +386,7 @@ class DietaryExpertSystem:
         df, ncf_active = _do(ncf_ok, with_ncf, without_ncf)
 
         df = df.sort_values("_final_score", ascending=False)
-        # 🛠️ نفس إصلاح بَج DataFrame الفاضي (انظر التعليق أعلى عند
-        # _expert_score) — explain_recipe معرّضة لنفس الانهيار بالضبط.
+       
         is_df_empty_explain = len(df) == 0
         df["_reason"] = (
             pd.Series([], dtype="object", index=df.index) if is_df_empty_explain
@@ -534,15 +398,10 @@ class DietaryExpertSystem:
         )
         df = df.drop(columns=drop_cols)
 
-        # ══ 9: التحذيرات ══════════════════════════════════
+        
         warnings = list(rules["conflict_messages"])
 
-        # تحذير غياب نوع الوجبة
-        # 🛠️ إصلاح: كان هذا الفحص يبحث عن meal_type حرفياً ("lunch")
-        # بدل القيمة المُترجَمة الحقيقية ("MainDish") — فيظهر التحذير
-        # دائماً حتى عندما ينجح الفلتر فعلياً (تناقض بين رسالة التحذير
-        # ونتيجة الفلترة الفعلية). نستخدم الآن نفس real_meal_value
-        # المُستخدَمة بـ _apply_meal_filter لضمان الاتساق.
+       
         real_meal_value = MEAL_TYPE_DATA_MAP.get(meal_type.lower(), meal_type)
         meal_check = _do(
             (meal_type != "any") and ("MealType" in self.df.columns),
@@ -551,7 +410,7 @@ class DietaryExpertSystem:
                     real_meal_value.lower(), na=False
                 )
             ]),
-            lambda: -1,   # -1 يعني "لا فحص" → لا تحذير
+            lambda: -1,   
         )
         warnings = warnings + _pick(
             meal_check == 0,
@@ -559,7 +418,7 @@ class DietaryExpertSystem:
             [],
         )
 
-        # تحذير soft_block
+        
         soft_warned = rules.get("soft_block", [])
         has_soft = len(soft_warned) > 0
         ellipsis = _pick(len(soft_warned) > 5, "...", "")
@@ -570,14 +429,14 @@ class DietaryExpertSystem:
             [],
         )
 
-        # تحذير قلة النتائج
+       
         warnings = warnings + _pick(
             len(df) < 5,
             [f"Only {len(df)} recipes match all restrictions."],
             [],
         )
 
-        # نمط الأكل الصحي
+       
         no_med = (not profile.conditions) and (not profile.pregnant)
         healthy_style = _do(
             no_med,
@@ -602,9 +461,6 @@ class DietaryExpertSystem:
         }
 
 
-# ══════════════════════════════════════════════════════════════
-# دوال فلترة مساعدة (vectorized — بلا حلقات صريحة)
-# ══════════════════════════════════════════════════════════════
 
 def map_safe(raw):
     """تحويل عناصر القائمة لنصوص دون map/comprehension (numpy)."""
@@ -695,9 +551,7 @@ def _apply_numeric_rule(df, item):
         high_val = rule[2] if (is_between and len(rule) >= 3) else val
 
         def apply_op():
-            # NaN لا يفترض أن تساوي 0 أو 9999 بسياق between (كلتاهما
-            # قد تقع خطأً داخل النطاق لو low=0 أو high>=9999) — نستخدم
-            # قيمة سالبة كبيرة بعيدة عن أي نطاق واقعي بدلاً من ذلك.
+            
             fill = (
                 -999999 if is_between
                 else 9999 if op.startswith("<")
@@ -741,7 +595,7 @@ def _apply_meal_filter(df, meal_type: str):
             real_value.lower(), na=False
         )
         df_meal = df[mask]
-        # لو فيه نتائج نأخذها، وإلا نُبقي df الأصلي
+        
         return _pick(len(df_meal) > 0, df_meal, df)
 
     return {True: do, False: (lambda: df)}[active]()

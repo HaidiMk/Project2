@@ -583,6 +583,25 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Common in children; many outgrow by adolescence",
     },
 
+    # ── حساسية السمسم — FDA FASTER Act 2023 (المسبب التاسع رسمياً) ──
+    "sesame_allergy": {
+        "numeric_rules": {},
+        "warning_rules": {},
+        "strict_block": [
+            "sesame", "sesame seed", "sesame seeds", "sesame oil",
+            "sesame paste", "tahini", "benne", "benne seed",
+            "gomashio", "halva", "za'atar", "zaatar",
+        ],
+        "soft_block": [],
+        "preferred_ingredients": [
+            "sunflower seeds", "pumpkin seeds", "poppy seeds",
+        ],
+        "min_requirements": {},
+        "max_servings": 1,
+        "source": "FDA FASTER Act 2023 — 9th major allergen",
+        "note":   "Effective Jan 1, 2023; hidden often in buns, sauces, hummus",
+    },
+
     # ── النقرس — ACR 2020 ─────────────────────────────────
     "gout": {
         "numeric_rules": {

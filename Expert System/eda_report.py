@@ -1,9 +1,3 @@
-"""
-eda_report.py — Exploratory Data Analysis
-==========================================
-تحليل شامل لقاعدة بيانات الوصفات
-شغّل بـ: python eda_report.py
-"""
 
 import pandas as pd
 import numpy as np
@@ -15,20 +9,20 @@ print("\n" + "=" * 60)
 print("  Smart Dietary Advisor — EDA Report")
 print("=" * 60)
 
-# ── تحميل البيانات ─────────────────────────────────────────
+
 print("\n  Loading data...")
 df = pd.read_csv("data/cleaned_recipes.csv", low_memory=False)
 print(f"  Total recipes: {len(df):,}")
 print(f"  Total columns: {len(df.columns)}")
 
-# ── 1. معلومات أساسية ──────────────────────────────────────
+
 print("\n" + "-" * 60)
 print("  1. Basic Information")
 print("-" * 60)
 print(f"  Shape: {df.shape}")
 print(f"  Memory usage: {df.memory_usage(deep=True).sum() / 1024**2:.1f} MB")
 
-# ── 2. القيم المفقودة ──────────────────────────────────────
+
 print("\n" + "-" * 60)
 print("  2. Missing Values")
 print("-" * 60)
@@ -43,7 +37,7 @@ for col in nutrient_cols:
         pct = missing / len(df) * 100
         print(f"  {col:<25}: {missing:>7,} missing ({pct:.1f}%)")
 
-# ── 3. إحصائيات القيم الغذائية ─────────────────────────────
+
 print("\n" + "-" * 60)
 print("  3. Nutritional Statistics")
 print("-" * 60)
@@ -55,7 +49,7 @@ for col in nutrient_cols:
         print(f"  {col:<25} {data.min():>8.1f} {data.mean():>8.1f} "
               f"{data.median():>8.1f} {data.max():>8.1f}")
 
-# ── 4. توزيع التقييمات ─────────────────────────────────────
+
 print("\n" + "-" * 60)
 print("  4. Rating Distribution")
 print("-" * 60)
@@ -67,7 +61,7 @@ if "Rating" in df.columns:
     print(f"  4-star recipes      : {(ratings >= 4).sum():,} ({(ratings >= 4).mean()*100:.1f}%)")
     print(f"  Below 3-star        : {(ratings < 3).sum():,} ({(ratings < 3).mean()*100:.1f}%)")
 
-# ── 5. فئات الوصفات ────────────────────────────────────────
+
 print("\n" + "-" * 60)
 print("  5. Top Recipe Categories")
 print("-" * 60)
@@ -78,7 +72,7 @@ if "RecipeCategory" in df.columns:
         bar = "█" * int(pct / 2)
         print(f"  {str(cat):<30} {count:>7,} ({pct:>5.1f}%) {bar}")
 
-# ── 6. توزيع السعرات ───────────────────────────────────────
+
 print("\n" + "-" * 60)
 print("  6. Calorie Distribution")
 print("-" * 60)
@@ -97,7 +91,7 @@ if "Calories" in df.columns:
         bar = "█" * int(pct / 3)
         print(f"  {label:<30} {count:>7,} ({pct:>5.1f}%) {bar}")
 
-# ── 7. الحساسيات في البيانات ───────────────────────────────
+
 print("\n" + "-" * 60)
 print("  7. Allergen Presence in Database")
 print("-" * 60)
@@ -114,7 +108,7 @@ for col, label in allergy_cols.items():
         pct = count / len(df) * 100
         print(f"  {label:<25}: {count:>7,} ({pct:.1f}%)")
 
-# ── 8. إحصائيات نظام الخبير ────────────────────────────────
+
 print("\n" + "-" * 60)
 print("  8. Expert System Coverage")
 print("-" * 60)
@@ -142,7 +136,7 @@ both_safe = df[
 ]
 print(f"  Safe for Diab+Hypert  : {len(both_safe):>7,} ({len(both_safe)/len(df)*100:.1f}%)")
 
-# ── حفظ التقرير ────────────────────────────────────────────
+
 report_lines = []
 report_lines.append("Smart Dietary Advisor — EDA Report")
 report_lines.append(f"Total Recipes: {len(df):,}")

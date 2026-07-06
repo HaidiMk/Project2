@@ -1,30 +1,16 @@
-"""
-combined_rules.py — Smart Dietary Advisor v4.0
-===============================================
-قواعد دمج الحالات الطبية المتعددة — أكثر من 40 تركيبة
 
-عند وجود أكثر من حالة طبية لدى المستخدم:
-    → لا يكفي جمع القيود فقط
-    → يُطبَّق الحد الأشد صرامةً دائماً
-    → تُعرض رسائل تحذير (conflict_warning) للمستخدم
-
-كل مفتاح هو tuple من أسماء الحالات (مرتبة أبجدياً).
-"""
 
 from typing import Dict, Any
 from rules.medical_rules import MEDICAL_RULES
 
 COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
 
-    # ══════════════════════════════════════
-    # أزواج الأمراض المزمنة
-    # ══════════════════════════════════════
 
     ("diabetes", "hypertension"): {
         "SugarContent":        ("<=", 15),
         "CarbohydrateContent": ("<=", 60),
         "FiberContent":        (">=", 5),
-        "SodiumContent":       ("<=", 500),   # أشد من الضغط منفرداً (600)
+        "SodiumContent":       ("<=", 500),   
         "SaturatedFatContent": ("<=", 5),
         "Calories":            ("<=", 600),
         "blocked_ingredients": [],
@@ -86,7 +72,7 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
     },
 
     ("chronic_kidney_disease", "hypertension"): {
-        "SodiumContent":       ("<=", 450),   # الأشد
+        "SodiumContent":       ("<=", 450),   
         "ProteinContent":      ("<=", 20),
         "CholesterolContent":  ("<=", 67),
         "FatContent":          ("<=", 20),
@@ -135,9 +121,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
-    # أزواج الحساسيات
-    # ══════════════════════════════════════
+   
+    #  الحساسيات
+    
 
     ("gluten_intolerance", "lactose_intolerance"): {
         "blocked_ingredients": list(set(
@@ -171,9 +157,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
+    
     # مرض + حساسية
-    # ══════════════════════════════════════
+   
 
     ("diabetes", "lactose_intolerance"): {
         "SugarContent":        ("<=", 15),
@@ -214,10 +200,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
-    # تركيبات الحمل
-    # ══════════════════════════════════════
-
+    
+    #  الحمل
+    
     ("diabetes", "pregnancy"): {
         "SugarContent":        ("<=", 10),
         "CarbohydrateContent": ("<=", 45),
@@ -274,9 +259,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
-    # تركيبات السمنة
-    # ══════════════════════════════════════
+    
+    #  السمنة
+    
 
     ("high_cholesterol", "obesity"): {
         "Calories":            ("<=", 400),
@@ -330,9 +315,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
-    # تركيبات الكلى
-    # ══════════════════════════════════════
+    
+    #  الكلى
+    
 
     ("chronic_kidney_disease", "heart_disease"): {
         "SodiumContent":       ("<=", 400),
@@ -400,10 +385,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
-    # تركيبات النقرس
-    # ══════════════════════════════════════
-
+    
+    #  النقرس
+    
     ("diabetes", "gout"): {
         "SugarContent":        ("<=", 8),
         "CarbohydrateContent": ("<=", 50),
@@ -456,9 +440,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
+    
     # تركيبات القولون العصبي IBS
-    # ══════════════════════════════════════
+    
 
     ("irritable_bowel_syndrome", "lactose_intolerance"): {
         "FatContent":          ("<=", 12),
@@ -517,10 +501,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
-    # تركيبات الكبد
-    # ══════════════════════════════════════
-
+    
+    #  الكبد
+    
     ("diabetes", "hepatitis"): {
         "SugarContent":        ("<=", 10),
         "CarbohydrateContent": ("<=", 50),
@@ -575,9 +558,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
+    
     # تركيبات الغدة الدرقية
-    # ══════════════════════════════════════
+    
 
     ("hypothyroidism", "obesity"): {
         "Calories":            ("<=", 450),
@@ -652,7 +635,7 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ── تحذير خطأ بيانات ──────────────────────────────────
+   
     ("hyperthyroidism", "hypothyroidism"): {
         "blocked_ingredients": [],
         "conflict_warning": (
@@ -661,10 +644,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
-    # تركيبات داء كرون
-    # ══════════════════════════════════════
-
+   
+    #  داء كرون
+    
     ("anemia", "crohns_disease"): {
         "Calories":            (">=", 350),
         "ProteinContent":      (">=", 15),
@@ -712,9 +694,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
+    
     # تركيبات الإمساك
-    # ══════════════════════════════════════
+    
 
     ("constipation", "hypothyroidism"): {
         "FiberContent":        (">=", 7),
@@ -727,9 +709,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
+    
     # تركيبات نقص الوزن
-    # ══════════════════════════════════════
+    
 
     ("diabetes", "underweight"): {
         "Calories":            (">=", 450),
@@ -757,9 +739,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
+    
     # الثلاثية القلبية
-    # ══════════════════════════════════════
+    
 
     ("diabetes", "heart_disease", "hypertension"): {
         "SugarContent":        ("<=", 8),
@@ -778,10 +760,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
+    
     # تركيبات كبار السن
-    # ══════════════════════════════════════
-
+    
     ("diabetes", "elderly"): {
         "SugarContent":        ("<=", 12),
         "CarbohydrateContent": ("<=", 55),
@@ -825,10 +806,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
+    
     # تركيبات الربو
-    # ══════════════════════════════════════
-
+    
     ("asthma", "egg_allergy"): {
         "SaturatedFatContent": ("<=", 5),
         "SodiumContent":       ("<=", 550),
@@ -874,9 +854,9 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    # ══════════════════════════════════════
+    
     # سيلياك + هشاشة العظام
-    # ══════════════════════════════════════
+   
 
     ("gluten_intolerance", "osteoporosis"): {
         "Calories":            (">=", 300),

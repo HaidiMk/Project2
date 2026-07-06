@@ -1,23 +1,11 @@
-"""
-user_profile.py — Smart Dietary Advisor v4.0 — NO-CONTROL-FLOW EDITION
-=======================================================================
-خالٍ تماماً من: if / elif / else / for / while / map / filter / reduce
-ومن التعابير الثلاثية ومن الـ comprehensions.
 
-البدائل:
-    - سلاسل if/elif المتدرجة (bmi_category) → numpy.select
-    - if بشرط واحد (bmr / daily_calories)   → فهرسة قاموس {True:..,False:..}[cond]
-    - dispatch                                → قواميس + .get()
-
-السلوك (القيم المُرجعة) مطابق تماماً للنسخة الأصلية UserProfile.
-"""
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 import numpy as np
 
-# ── معاملات النشاط البدني — Harris-Benedict ──────────────
+
 ACTIVITY_FACTORS = {
     "sedentary":   1.2,
     "light":       1.375,
@@ -37,18 +25,17 @@ class UserProfile:
     """الملف الشخصي للمستخدم — يحتوي على جميع المعطيات الصحية."""
 
     age:            int
-    height:         float                      # سم
-    weight:         float                        # كغ
-    gender:         str                          # "male" | "female"
+    height:         float                      
+    weight:         float                        
+    gender:         str                          
     pregnant:       bool             = False
     conditions:     List[str]        = field(default_factory=list)
     allergies:      List[str]        = field(default_factory=list)
     preferences:    List[str]        = field(default_factory=list)
     goal:           Optional[str]    = None
     activity_level: str              = "light"
-    meal_type:      str              = "any"     # breakfast/lunch/dinner/any
-
-    # ── خصائص مشتقة ──────────────────────────────────────
+    meal_type:      str              = "any"     
+   
     @property
     def bmi(self) -> float:
         h = self.height / 100
@@ -89,7 +76,7 @@ class UserProfile:
     def daily_calories(self) -> int:
         factor = ACTIVITY_FACTORS.get(self.activity_level, 1.375)
         base = self.bmr() * factor
-        # إضافة سعرات الحمل (350) دون if — ضرب بقيمة بوليانية
+       
         base = base + 350 * float(bool(self.pregnant))
         return round(base)
 

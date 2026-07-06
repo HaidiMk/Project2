@@ -1,15 +1,4 @@
-"""
-ncf_model.py — Neural Collaborative Filtering — NO-CONTROL-FLOW EDITION
-========================================================================
-خالٍ من العودية recursion ومن بنى التحكم التقليدية في الكود التنفيذي.
 
-البدائل:
-    - if/else البسيطة          → فهرسة قاموس _pick / _do
-    - تكرار epochs / batches   → functools.reduce بدل العودية
-    - try/except (تحميل النموذج) → _attempt (تنفيذ آمن عبر دالة)
-
-السلوك مطابق للنسخة الأصلية: NCFModel / NCFRecommender (train / predict_scores).
-"""
 
 import os
 from functools import reduce
@@ -21,9 +10,7 @@ import pandas as pd
 import numpy as np
 
 
-# ══════════════════════════════════════════════════════════════
-# أدوات بديلة عن بنى التحكم
-# ══════════════════════════════════════════════════════════════
+
 def _pick(cond, when_true, when_false):
     """بديل التعبير الثلاثي."""
     return {True: when_true, False: when_false}[bool(cond)]
@@ -43,13 +30,11 @@ def _attempt(fn: Callable, on_error):
     """بديل try/except: ينفّذ fn ويعيد on_error(الاستثناء) عند الفشل."""
     try:
         return fn()
-    except Exception as exc:                       # noqa: BLE001
+    except Exception as exc:                       
         return on_error(exc)
 
 
-# ══════════════════════════════════════════════════════════════
-# تعريف النموذج
-# ══════════════════════════════════════════════════════════════
+
 
 class NCFModel(nn.Module):
     """شبكة بسيطة: ميزات غذائية → درجة بين 0 و 5."""
@@ -73,9 +58,6 @@ class NCFModel(nn.Module):
         return self.network(x) * 5.0
 
 
-# ══════════════════════════════════════════════════════════════
-# الأعمدة والأوزان
-# ══════════════════════════════════════════════════════════════
 
 FEATURE_COLS = [
     "Calories", "ProteinContent", "FatContent",
@@ -96,9 +78,7 @@ GOAL_WEIGHTS = {
 }
 
 
-# ══════════════════════════════════════════════════════════════
-# الموصِّي
-# ══════════════════════════════════════════════════════════════
+
 
 class NCFRecommender:
     """واجهة الـ NCF للاستخدام في filtering_engine."""
@@ -132,7 +112,7 @@ class NCFRecommender:
 
         return _attempt(load_ok, load_fail)
 
-    # ──────────────────────────────────────────────────────
+   
     def train(self, df: pd.DataFrame, epochs: int = 5):
         """تدريب النموذج عبر functools.reduce على الحقب والدفعات بلا عودية."""
         print("\n   Training NCF model...")
@@ -160,7 +140,7 @@ class NCFRecommender:
             dataset, batch_size=512, shuffle=True
         )
 
-        # دالة دفعة واحدة: تُرجع خسارة الدفعة وتُراكمها
+        
         def run_batch(total_loss, batch):
             X_batch, y_batch = batch
             optimizer.zero_grad()
@@ -170,14 +150,14 @@ class NCFRecommender:
             optimizer.step()
             return total_loss + loss.item()
 
-        # دالة حقبة واحدة: تمشي على كل الدفعات عبر _fold ثم تطبع الخسارة
+       
         def run_epoch(epoch_idx, _):
             total = _fold(loader, 0.0, run_batch)
             avg = total / max(len(loader), 1)
             print(f"   Epoch {epoch_idx + 1}/{epochs} — Loss: {avg:.4f}")
             return epoch_idx + 1
 
-        # نمشي على أرقام الحقب 0..epochs-1 عبر _fold بلا عودية
+       
         epoch_seq = list(range(epochs))
         _fold(epoch_seq, 0, run_epoch)
 
@@ -201,7 +181,7 @@ class NCFRecommender:
         def trained():
             data = df[FEATURE_COLS].copy().fillna(0)
 
-            # تطبيع لو توفرت إحصاءات التدريب
+            
             def normalize():
                 diff = (self._maxs - self._mins).replace(0, 1)
                 return (data - self._mins) / diff

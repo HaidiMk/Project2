@@ -1,18 +1,8 @@
-"""
-constants.py — Smart Dietary Advisor v4.0 — FIXED
-===================================================
-التغييرات:
-    1. DISEASES_BY_STAGE: أزلنا الحساسيات (nut/egg/seafood_allergy)
-    2. DISEASES_FEMALE_ONLY: أمراض للإناث فقط (pcos)
-    3. ALLERGIES_BY_STAGE: قائمة الحساسيات لكل فئة عمرية
-    4. أضفنا crohns_disease وunderweight للمراهقين
-    5. حذف التكرار — كل قاموس معرّف مرة وحدة فقط
-    6. أضفنا MEAL_TYPE_EN لأنواع الوجبات
-"""
+
 
 from typing import Dict, List, Tuple
 
-# ══ فئات العمر ═══════════════════════════════════════════════
+
 AGE_RANGES: Dict[str, Tuple[int, int]] = {
     "child":   (1,  12),
     "teen":    (13, 17),
@@ -27,7 +17,6 @@ AGE_RANGE_EN: Dict[str, str] = {
     "elderly": "Elderly (65+ years)",
 }
 
-# ══ الأمراض لكل فئة عمرية — بدون حساسيات ════════════════════
 DISEASES_BY_STAGE: Dict[str, List[str]] = {
     "child": [
         "anemia",
@@ -93,7 +82,7 @@ DISEASES_BY_STAGE: Dict[str, List[str]] = {
     ],
 }
 
-# ══ أمراض الإناث فقط ═════════════════════════════════════════
+
 DISEASES_FEMALE_ONLY: Dict[str, List[str]] = {
     "child":   [],
     "teen":    ["pcos"],
@@ -101,15 +90,16 @@ DISEASES_FEMALE_ONLY: Dict[str, List[str]] = {
     "elderly": [],
 }
 
-# ══ الحساسيات لكل فئة عمرية ══════════════════════════════════
+
 ALLERGIES_BY_STAGE: Dict[str, List[str]] = {
-    "child":   ["peanuts", "milk", "eggs", "seafood", "soy", "gluten"],
-    "teen":    ["peanuts", "milk", "eggs", "seafood", "soy", "gluten"],
-    "adult":   ["peanuts", "milk", "eggs", "seafood", "soy", "gluten"],
-    "elderly": ["peanuts", "milk", "eggs", "seafood", "soy", "gluten"],
+   
+    "child":   ["peanuts", "milk", "eggs", "seafood", "soy", "gluten", "sesame"],
+    "teen":    ["peanuts", "milk", "eggs", "seafood", "soy", "gluten", "sesame"],
+    "adult":   ["peanuts", "milk", "eggs", "seafood", "soy", "gluten", "sesame"],
+    "elderly": ["peanuts", "milk", "eggs", "seafood", "soy", "gluten", "sesame"],
 }
 
-# ══ أنواع الوجبات ← جديد ═════════════════════════════════════
+
 MEAL_TYPE_EN: Dict[str, str] = {
     "breakfast": "Breakfast",
     "lunch":     "Lunch",
@@ -117,7 +107,7 @@ MEAL_TYPE_EN: Dict[str, str] = {
     "any":       "No preference — show all",
 }
 
-# ══ أسماء العرض ══════════════════════════════════════════════
+
 DISEASE_EN: Dict[str, str] = {
     "diabetes":                 "Diabetes",
     "hypertension":             "Hypertension (High Blood Pressure)",
@@ -150,6 +140,7 @@ ALLERGY_EN: Dict[str, str] = {
     "seafood": "Seafood (Fish & Shellfish)",
     "soy":     "Soy",
     "gluten":  "Gluten / Wheat",
+    "sesame":  "Sesame",
 }
 
 PREFERENCE_EN: Dict[str, str] = {
