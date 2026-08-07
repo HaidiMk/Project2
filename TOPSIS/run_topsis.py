@@ -47,8 +47,18 @@ if __name__ == "__main__":
     safe_recipes = result["safe_recipes"]
     print(f"\nعدد الوصفات الآمنة (بعد النظام الخبير): {len(safe_recipes)}")
 
+    # ── تفضيلات الذوق (اختياري) ───────────────────────────────
+    taste_text = input(
+        "\nDescribe your food preferences — separate liked and disliked with ';' or 'but',\n"
+        "and start the disliked part with 'dislike', 'hate', or 'avoid'\n"
+        "(e.g. \"garlic, olive oil, chicken; dislike seafood\") — or press Enter to skip: "
+    ).strip()
+    taste_text = taste_text or None
+
     # ── 3) إعادة الترتيب بالترتيب المدمج (Layer 2) ────────────
-    ranked = rank_with_topsis(safe_recipes, profile.goal)
+    ranked = rank_with_topsis(
+        safe_recipes, profile.goal, user_taste_text=taste_text
+    )
 
     print("\nأفضل 10 حسب TOPSIS فقط (القديم):")
     old = ranked.sort_values("_topsis_score", ascending=False)
@@ -58,6 +68,9 @@ if __name__ == "__main__":
 
     print("\nأفضل 10 حسب الترتيب المدمج (الجديد):")
     cols = ["Name", "Calories", "ProteinContent", "SugarContent",
-            "_topsis_score", "_ai_health_score", "_expert_score", "final_score"]
+            "_topsis_score", "_ai_health_score", "_expert_score"]
+    if "_taste_score" in ranked.columns:
+        cols.append("_taste_score")
+    cols.append("final_score")
     cols = [c for c in cols if c in ranked.columns]
     print(ranked[cols].head(10).to_string(index=False))

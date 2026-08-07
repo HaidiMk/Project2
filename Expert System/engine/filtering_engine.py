@@ -14,7 +14,7 @@ from rules.goals_and_preferences import GOAL_VECTORS, get_healthy_diet_style
 from rules.medical_rules import MEDICAL_RULES
 from engine.rule_builder import get_applicable_rules, get_applicable_condition_keys
 from engine.scorer import score_recipe, explain_recipe
-from ml.inference import ai_health_score
+from ml.health_classifier.inference import ai_health_score
 
 
 

@@ -118,6 +118,15 @@ def _ask_conditions():
         return keys
 
 
+def _ask_taste():
+    raw = input(
+        "\n  Food preferences — separate liked and disliked with ';' or 'but',\n"
+        "  and start the disliked part with 'dislike', 'hate', or 'avoid'\n"
+        "  (e.g. \"garlic, olive oil, chicken; dislike seafood\" — or ENTER to skip): "
+    ).strip()
+    return raw or None
+
+
 def _ask_goal():
     while True:
         raw = input(
@@ -174,7 +183,8 @@ def run():
     result = system.filter_recipes(profile)
 
     safe = result["safe_recipes"]
-    ranked = rank_with_topsis(safe, profile.goal)
+    taste_text = _ask_taste()
+    ranked = rank_with_topsis(safe, profile.goal, user_taste_text=taste_text)
 
     ps = result["profile_summary"]
     print(f"\n  Age: {ps['age']} | Gender: {ps['gender']} | "
@@ -185,27 +195,35 @@ def run():
           f"{result['total_original']:,} ({result['filter_rate']}%)")
     print(f"  AI health score mode: {ai_mode_note(profile)}")
 
-    print("\n  Top 10 — final blended ranking "
-          "(final = 0.4*TOPSIS + 0.4*AI + 0.2*expert_norm):")
-    print("  " + "-" * 110)
+    has_taste = "_taste_score" in ranked.columns
+    blend_txt = ("0.35*TOPSIS + 0.35*AI + 0.15*expert_norm + 0.15*taste"
+                 if has_taste else "0.4*TOPSIS + 0.4*AI + 0.2*expert_norm")
+    print(f"\n  Top 10 — final blended ranking (final = {blend_txt}):")
+    print("  " + "-" * (118 if has_taste else 110))
     hdr = (f"  {'#':<3} {'Recipe Name':<40} {'Cal':>7} {'Prot':>6} "
-           f"{'Sugar':>7} {'TOPSIS':>8} {'AI':>6} {'Exp*':>6} {'Final':>7}")
+           f"{'Sugar':>7} {'TOPSIS':>8} {'AI':>6} {'Exp*':>6}")
+    if has_taste:
+        hdr += f" {'Taste':>6}"
+    hdr += f" {'Final':>7}"
     print(hdr)
-    print("  " + "-" * 110)
+    print("  " + "-" * (118 if has_taste else 110))
 
     for i, (_, row) in enumerate(ranked.head(10).iterrows(), 1):
         raw = html.unescape(str(row.get("Name", "Unknown")))
         name = (raw[:38] + "..") if len(raw) > 40 else raw.ljust(40)
-        print(f"  {i:<3} {name} "
-              f"{row.get('Calories', 0):>7.0f} "
-              f"{row.get('ProteinContent', 0):>6.0f} "
-              f"{row.get('SugarContent', 0):>7.1f} "
-              f"{row.get('_topsis_score', 0):>8.4f} "
-              f"{row.get('_ai_health_score', 0):>6.3f} "
-              f"{row.get('_expert_score', 0):>6.3f} "
-              f"{row.get('final_score', 0):>7.4f}")
+        line = (f"  {i:<3} {name} "
+                f"{row.get('Calories', 0):>7.0f} "
+                f"{row.get('ProteinContent', 0):>6.0f} "
+                f"{row.get('SugarContent', 0):>7.1f} "
+                f"{row.get('_topsis_score', 0):>8.4f} "
+                f"{row.get('_ai_health_score', 0):>6.3f} "
+                f"{row.get('_expert_score', 0):>6.3f}")
+        if has_taste:
+            line += f" {row.get('_taste_score', 0):>6.3f}"
+        line += f" {row.get('final_score', 0):>7.4f}"
+        print(line)
 
-    print("  " + "-" * 110)
+    print("  " + "-" * (118 if has_taste else 110))
     print("  * Exp = raw expert score (min-max normalized inside final)")
     print("=" * 78)
 

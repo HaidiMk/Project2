@@ -22,3 +22,6 @@ Expert System/data/recipes.csv
 
 # أو بشكل عام
 *.csv
+
+# Large generated artifacts — regenerate locally, see Expert System/ml/setup_artifacts.md
+Expert System/data/recipe_taste_embeddings.pkl

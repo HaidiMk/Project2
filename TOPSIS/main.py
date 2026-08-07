@@ -54,19 +54,24 @@ def print_old_vs_new(ranked_df, top_n: int = 5):
 
 
 def print_topsis_results(ranked_df, top_n: int = 10):
-    """طباعة نتيجة TOPSIS المدمجة (Layer 2) — مع مكوّنات الدرجة الثلاثة."""
-    print("\n" + "=" * 108)
-    print("  TOPSIS Ranking — Layer 2 (blended: 0.4*TOPSIS + 0.4*AI + 0.2*Expert)".center(106))
-    print("=" * 108)
+    """طباعة نتيجة TOPSIS المدمجة (Layer 2) — مع مكوّنات الدرجة."""
+    has_taste = "_taste_score" in ranked_df.columns
+    blend_txt = ("0.35*TOPSIS + 0.35*AI + 0.15*Expert + 0.15*Taste"
+                 if has_taste else "0.4*TOPSIS + 0.4*AI + 0.2*Expert")
+    width = 118 if has_taste else 108
+    print("\n" + "=" * width)
+    print(f"  TOPSIS Ranking — Layer 2 (blended: {blend_txt})".center(width - 2))
+    print("=" * width)
 
     if ranked_df.empty:
         print("  No recipes to rank.")
         return
 
     hdr = (f"  {'#':<3} {'Recipe Name':<40} "
-           f"{'Cal':>6} {'Prot':>5} {'Sugar':>6} {'TOPSIS':>7} {'AI':>6} {'Exp*':>6} {'Final':>7}")
+           f"{'Cal':>6} {'Prot':>5} {'Sugar':>6} {'TOPSIS':>7} {'AI':>6} "
+           f"{'Exp*':>6}" + (" {'Taste':>6}" if has_taste else "") + f" {'Final':>7}")
     print(hdr)
-    print("  " + "-" * 104)
+    print("  " + "-" * (width - 4))
 
     for i, (_, row) in enumerate(ranked_df.head(top_n).iterrows(), 1):
         name = str(row.get("Name", "Unknown"))
@@ -77,13 +82,18 @@ def print_topsis_results(ranked_df, top_n: int = 10):
         tops  = row.get("_topsis_score", 0)
         ai    = row.get("_ai_health_score", 0)
         exp   = row.get("_expert_score", 0)
+        taste = row.get("_taste_score", 0)
         final = row.get("final_score", 0)
 
-        print(f"  {i:<3} {name} "
-              f"{cal:>6.0f} {prot:>5.0f} {sugar:>6.1f} {tops:>7.4f} "
-              f"{ai:>6.3f} {exp:>6.3f} {final:>7.4f}")
+        line = (f"  {i:<3} {name} "
+                f"{cal:>6.0f} {prot:>5.0f} {sugar:>6.1f} {tops:>7.4f} "
+                f"{ai:>6.3f} {exp:>6.3f}")
+        if has_taste:
+            line += f" {taste:>6.3f}"
+        line += f" {final:>7.4f}"
+        print(line)
 
-    print("=" * 108)
+    print("=" * width)
 
 
 def main():
@@ -101,8 +111,18 @@ def main():
         result = system.filter_recipes(profile)
         print_results(result, top_n=15)
 
-        # ── 4) تطبيق الترتيب المدمج على نفس الوصفات الآمنة (Layer 2) ─
-        ranked = rank_with_topsis(result["safe_recipes"], profile.goal)
+        # ── 4) إدخال تفضيلات الذوق (اختياري) ──────────────────
+        taste_text = input(
+            "\n  Describe your food preferences — separate liked and disliked with ';' or 'but',\n"
+            "  and start the disliked part with 'dislike', 'hate', or 'avoid'\n"
+            "  (e.g. \"garlic, olive oil, chicken; dislike seafood\") — or press Enter to skip: "
+        ).strip()
+        taste_text = taste_text or None
+
+        # ── 5) تطبيق الترتيب المدمج على نفس الوصفات الآمنة (Layer 2) ─
+        ranked = rank_with_topsis(
+            result["safe_recipes"], profile.goal, user_taste_text=taste_text
+        )
         print_old_vs_new(ranked, top_n=5)
         print_topsis_results(ranked, top_n=10)
 

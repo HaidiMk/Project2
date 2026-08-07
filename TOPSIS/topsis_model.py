@@ -14,9 +14,16 @@ to Ideal Solution) — ترتيب الوصفات حسب عدة معايير غذ
     6. حساب درجة التقارب (Closeness Score) — بين 0 و 1
 """
 
+import sys
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from typing import Optional, List, Dict, Tuple
+
+EXPERT_SYSTEM_DIR = Path(__file__).resolve().parents[1] / "Expert System"
+if str(EXPERT_SYSTEM_DIR) not in sys.path:
+    sys.path.insert(0, str(EXPERT_SYSTEM_DIR))
 
 
 # ══ المعايير المستخدمة بـ TOPSIS ═════════════════════════════
@@ -140,13 +147,20 @@ def topsis_score(df: pd.DataFrame, goal: Optional[str] = None) -> np.ndarray:
     return closeness
 
 
-# ══ الترتيب النهائي المدمج (3 مصادر) ════════════════════════════
-# final = 0.4*TOPSIS + 0.4*AI health + 0.2*expert_normalized
+# ══ الترتيب النهائي المدمج ══════════════════════════════════════
+# بدون ذوق (user_taste_text=None): final = 0.4*TOPSIS + 0.4*AI + 0.2*expert_norm
+# مع ذوق:          final = 0.35*TOPSIS + 0.35*AI + 0.15*expert_norm + 0.15*taste
 # (الأوزان تُعاد تطبيعها تلقائياً لو غاب أحد الأعمدة — توافق رجعي)
 BLEND_WEIGHTS: Dict[str, float] = {
     "_topsis_score":     0.4,
     "_ai_health_score":  0.4,
     "_expert_score":     0.2,
+}
+TASTE_BLEND_WEIGHTS: Dict[str, float] = {
+    "_topsis_score":     0.35,
+    "_ai_health_score":  0.35,
+    "_expert_score":     0.15,
+    "_taste_score":      0.15,
 }
 
 
@@ -158,16 +172,23 @@ def _normalize_minmax(values: np.ndarray) -> np.ndarray:
     return np.full_like(v, 0.5) if flat else (v - lo) / (hi - lo)
 
 
-def rank_with_topsis(df: pd.DataFrame, goal: Optional[str] = None) -> pd.DataFrame:
+def rank_with_topsis(
+    df: pd.DataFrame,
+    goal: Optional[str] = None,
+    user_taste_text: Optional[str] = None,
+) -> pd.DataFrame:
     """
     رتّب الوصفات الآمنة بالترتيب النهائي المدمج:
         1. TOPSIS score (بمفرده) → _topsis_score
         2. درجة الصحة الذكية (من النظام الخبير) → _ai_health_score
         3. درجة الخبير → _expert_score (تُطبَّع min-max للصفوف الحالية)
+        4. درجة الذوق → _taste_score (إن أُعطي user_taste_text)
     ثم:
-        final_score = 0.4*TOPSIS + 0.4*AI + 0.2*expert_normalized
+        بدون ذوق: final_score = 0.4*TOPSIS + 0.4*AI + 0.2*expert_normalized
+        مع ذوق:   final_score = 0.35*TOPSIS + 0.35*AI
+                                + 0.15*expert_normalized + 0.15*taste
     يُرجع الإطار مرتباً تنازلياً بـ final_score مع بقاء أعمدة الدرجات
-    الثلاثة ظاهرة للمقارنة.
+    ظاهرة للمقارنة. عند غياب user_taste_text يتصرف مطابقاً للسابق.
     """
     df = df.copy()
     df["_topsis_score"] = topsis_score(df, goal=goal)
@@ -175,8 +196,14 @@ def rank_with_topsis(df: pd.DataFrame, goal: Optional[str] = None) -> pd.DataFra
     if len(df) == 0:
         return df
 
-    used = [c for c in BLEND_WEIGHTS if c in df.columns]
-    weights = np.array([BLEND_WEIGHTS[c] for c in used], dtype=float)
+    blend = BLEND_WEIGHTS
+    if user_taste_text:
+        from ml.word2vec.taste_inference import taste_score
+        df["_taste_score"] = taste_score(df, user_taste_text)
+        blend = TASTE_BLEND_WEIGHTS
+
+    used = [c for c in blend if c in df.columns]
+    weights = np.array([blend[c] for c in used], dtype=float)
     weights = weights / weights.sum()
 
     parts = []
