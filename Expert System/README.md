@@ -11,7 +11,7 @@
 نظام ذكاء اصطناعي متكامل يجمع بين ثلاث تقنيات:
 - **Expert System** — قواعد طبية صارمة (24 حالة، 40+ تركيبة دمج)
 - **Content-Based Filtering** — تصفية وترتيب بناءً على القيم الغذائية
-- **Neural Collaborative Filtering (NCF)** — توصيات مخصصة بالشبكات العصبونية
+- **Deep Health Classifier** — مصنّف شبكي (MLP) يقيس توافق الوصفة مع حالات المستخدم الطبية
 
 قاعدة البيانات: **384,541 وصفة** مع قيمها الغذائية الكاملة
 
@@ -65,15 +65,13 @@ expert_split/
 ├── engine/
 │   ├── rule_builder.py            ← تجميع القواعد
 │   ├── scorer.py                  ← تقييم الوصفات
-│   ├── filtering_engine.py        ← المحرك الرئيسي
-│   └── ncf_model.py               ← نموذج NCF (PyTorch)
+│   └── filtering_engine.py        ← المحرك الرئيسي
 │
 ├── ui/
 │   └── cli_interface.py           ← واجهة سطر الأوامر
 │
 ├── data/
-│   ├── cleaned_recipes.csv        ← قاعدة البيانات (384,541 وصفة)
-│   └── ncf_model.pt               ← النموذج المدرب
+│   └── cleaned_recipes.csv        ← قاعدة البيانات (384,541 وصفة)
 │
 └── output/
     ├── safe_recipes.csv
@@ -145,32 +143,13 @@ Peanuts / Tree Nuts, Milk and Dairy, Eggs, Seafood, Soy, Gluten
         ↓
 6. فلتر اسم الوصفة      ← Name column
         ↓
-7. Expert Score         ← scorer.py (70%)
-   +
-   NCF Score            ← ncf_model.py (30%)
+7. Expert Score         ← scorer.py (ترتيب الوصفات الآمنة)
         ↓
 النتائج الآمنة المرتبة
 ```
 
----
-
-## نموذج NCF
-
-```
-Input:  القيم الغذائية + هدف المستخدم (10 ميزات)
-        ↓
-Layer 1: Linear(10 → 64) + ReLU + Dropout(0.2)
-        ↓
-Layer 2: Linear(64 → 32) + ReLU + Dropout(0.2)
-        ↓
-Layer 3: Linear(32 → 16) + ReLU
-        ↓
-Output: Linear(16 → 1) + Sigmoid × 5
-        ↓
-درجة توقعية (0 - 5)
-```
-
-التدريب: 5 epochs على 384,541 وصفة — Final Loss: 0.0329
+> الترتيب النهائي للمستخدم يُحسب في طبقة TOPSIS المدمجة:
+> `final = 0.4*TOPSIS + 0.4*AI health + 0.2*expert_normalized`
 
 ---
 

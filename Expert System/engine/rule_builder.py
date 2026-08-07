@@ -350,3 +350,17 @@ def get_applicable_rules(profile: "UserProfile") -> dict:
         _preferences_block(profile.preferences),
     ]
     return _combine_blocks(blocks)
+
+
+def get_applicable_condition_keys(profile: "UserProfile") -> List[str]:
+    """
+    مفاتيح الحالات المطبّقة فعلياً على المستخدم — مصدر condition_keys
+    لطبقة الذكاء الاصطناعي (ml/inference.ai_health_score):
+        الحالات الطبية المعروفة (بعد استبعاد المستحيلة وغير المؤنثة)
+        + الحمل/الفئة العمرية (children/elderly) إن طبّقت.
+    المفاتيح تطابق لاحقة ملصقات التدريب: "diabetes" → "label_diabetes".
+    """
+    return (
+        _known_conditions(profile.conditions, profile.gender)
+        + _life_stage_rule_keys(profile)
+    )

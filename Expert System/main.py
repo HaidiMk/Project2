@@ -39,7 +39,6 @@ DATA_DIR = BASE_DIR / "data"
 OUTPUT_DIR = BASE_DIR / "output"
 
 RECIPES_FILE = DATA_DIR / "cleaned_recipes.csv"
-NCF_MODEL_FILE = DATA_DIR / "ncf_model.pt"
 
 
 # ── أدوات بديلة عن بنى التحكم ─────────────────────────────
@@ -172,8 +171,7 @@ def run_demo(system: DietaryExpertSystem):
 def main():
     df = load_data()
 
-    ncf_exists = NCF_MODEL_FILE.exists()
-    system = DietaryExpertSystem(df, train_ncf=not ncf_exists)
+    system = DietaryExpertSystem(df)
 
     # وضع العرض التوضيحي
     is_demo = "--demo" in sys.argv

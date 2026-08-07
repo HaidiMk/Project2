@@ -138,3 +138,53 @@ def topsis_score(df: pd.DataFrame, goal: Optional[str] = None) -> np.ndarray:
     closeness = dist_worst / total_dist
 
     return closeness
+
+
+# ══ الترتيب النهائي المدمج (3 مصادر) ════════════════════════════
+# final = 0.4*TOPSIS + 0.4*AI health + 0.2*expert_normalized
+# (الأوزان تُعاد تطبيعها تلقائياً لو غاب أحد الأعمدة — توافق رجعي)
+BLEND_WEIGHTS: Dict[str, float] = {
+    "_topsis_score":     0.4,
+    "_ai_health_score":  0.4,
+    "_expert_score":     0.2,
+}
+
+
+def _normalize_minmax(values: np.ndarray) -> np.ndarray:
+    """تطبيع 0-1 (min-max) مع معالجة الحالة المتدهورة (قيم متساوية)."""
+    v = np.asarray(values, dtype=float)
+    lo, hi = v.min(), v.max()
+    flat = hi <= lo + 1e-12
+    return np.full_like(v, 0.5) if flat else (v - lo) / (hi - lo)
+
+
+def rank_with_topsis(df: pd.DataFrame, goal: Optional[str] = None) -> pd.DataFrame:
+    """
+    رتّب الوصفات الآمنة بالترتيب النهائي المدمج:
+        1. TOPSIS score (بمفرده) → _topsis_score
+        2. درجة الصحة الذكية (من النظام الخبير) → _ai_health_score
+        3. درجة الخبير → _expert_score (تُطبَّع min-max للصفوف الحالية)
+    ثم:
+        final_score = 0.4*TOPSIS + 0.4*AI + 0.2*expert_normalized
+    يُرجع الإطار مرتباً تنازلياً بـ final_score مع بقاء أعمدة الدرجات
+    الثلاثة ظاهرة للمقارنة.
+    """
+    df = df.copy()
+    df["_topsis_score"] = topsis_score(df, goal=goal)
+
+    if len(df) == 0:
+        return df
+
+    used = [c for c in BLEND_WEIGHTS if c in df.columns]
+    weights = np.array([BLEND_WEIGHTS[c] for c in used], dtype=float)
+    weights = weights / weights.sum()
+
+    parts = []
+    for col, w in zip(used, weights):
+        vals = df[col].astype(float).to_numpy()
+        if col == "_expert_score":
+            vals = _normalize_minmax(vals)
+        parts.append(w * vals)
+
+    df["final_score"] = sum(parts)
+    return df.sort_values("final_score", ascending=False).reset_index(drop=True)

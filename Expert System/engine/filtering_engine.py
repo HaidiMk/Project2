@@ -12,9 +12,9 @@ from core.constants import NUTRIENT_COLS
 from rules.halal_and_allergies import HALAL_BLACKLIST
 from rules.goals_and_preferences import GOAL_VECTORS, get_healthy_diet_style
 from rules.medical_rules import MEDICAL_RULES
-from engine.rule_builder import get_applicable_rules
+from engine.rule_builder import get_applicable_rules, get_applicable_condition_keys
 from engine.scorer import score_recipe, explain_recipe
-from engine.ncf_model import NCFRecommender
+from ml.inference import ai_health_score
 
 
 
@@ -148,7 +148,7 @@ def _has_any_terms(text: str, terms: List[str]) -> bool:
 
 class DietaryExpertSystem:
 
-    def __init__(self, df: pd.DataFrame, train_ncf: bool = False):
+    def __init__(self, df: pd.DataFrame):
         self.df = df.copy().reset_index(drop=True)
         self._normalize_columns()
         self._ing_col = self._detect_ingredient_column()
@@ -157,17 +157,6 @@ class DietaryExpertSystem:
         _do(
             bool(self._ing_col),
             lambda: print(f"   Ingredient column: '{self._ing_col}'"),
-            lambda: None,
-        )
-
-        self.ncf = NCFRecommender()
-        need_train = train_ncf and (not self.ncf.trained)
-        no_model   = (not train_ncf) and (not self.ncf.trained)
-
-        _do(need_train, lambda: self.ncf.train(self.df, epochs=5), lambda: None)
-        _do(
-            no_model,
-            lambda: print("   NCF: no saved model — run with train_ncf=True to train."),
             lambda: None,
         )
 
@@ -364,26 +353,14 @@ class DietaryExpertSystem:
             )
         )
 
-       
-        ncf_scores = self.ncf.predict_scores(df, goal=profile.goal)
-        ncf_ok = (
-            self.ncf.trained
-            and (ncf_scores is not None)
-            and (len(ncf_scores) == len(df))
+        
+        cond_keys = get_applicable_condition_keys(profile)
+        df["_ai_health_score"] = (
+            pd.Series([], dtype="float64", index=df.index) if is_df_empty
+            else ai_health_score(df, cond_keys)
         )
 
-        def with_ncf():
-            d = df.copy()
-            d["_ncf_score"]   = ncf_scores
-            d["_final_score"] = d["_expert_score"] * 0.7 + d["_ncf_score"] * 0.3
-            return d, True
-
-        def without_ncf():
-            d = df.copy()
-            d["_final_score"] = d["_expert_score"]
-            return d, False
-
-        df, ncf_active = _do(ncf_ok, with_ncf, without_ncf)
+        df["_final_score"] = df["_expert_score"]
 
         df = df.sort_values("_final_score", ascending=False)
        
@@ -393,10 +370,10 @@ class DietaryExpertSystem:
             else df.apply(lambda r: explain_recipe(r, profile.goal), axis=1)
         )
 
-        drop_cols = ["_expert_score", "_final_score"] + _pick(
-            ncf_active, ["_ncf_score"], []
-        )
-        df = df.drop(columns=drop_cols)
+        # نُبقي _expert_score و _ai_health_score في الناتج — طبقة TOPSIS
+        # المدمجة (topsis_model.rank_with_topsis) تحتاجها في المعادلة:
+        #     final = 0.4*TOPSIS + 0.4*AI + 0.2*expert_normalized
+        df = df.drop(columns=["_final_score"])
 
         
         warnings = list(rules["conflict_messages"])
@@ -457,7 +434,6 @@ class DietaryExpertSystem:
             "profile_summary":      profile.summary(),
             "target_meal_calories": target_cal,
             "meal_type":            meal_type,
-            "ncf_active":           ncf_active,
         }
 
 

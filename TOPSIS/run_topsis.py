@@ -25,17 +25,7 @@ import pandas as pd
 from engine.filtering_engine import DietaryExpertSystem
 from core.user_profile import UserProfile
 
-from topsis_model import topsis_score
-
-
-def rank_with_topsis(df: pd.DataFrame, profile: UserProfile) -> pd.DataFrame:
-    """
-    رتّب الوصفات الآمنة (الناتجة من النظام الخبير) بخوارزمية TOPSIS
-    حسب هدف المستخدم.
-    """
-    df = df.copy()
-    df["_topsis_score"] = topsis_score(df, goal=profile.goal)
-    return df.sort_values("_topsis_score", ascending=False).reset_index(drop=True)
+from topsis_model import topsis_score, rank_with_topsis
 
 
 if __name__ == "__main__":
@@ -45,8 +35,7 @@ if __name__ == "__main__":
     raw_df = pd.read_csv(data_path, low_memory=False)
 
     # ── 2) تشغيل النظام الخبير (Layer 1) ─────────────────────
-    # train_ncf=False عشان نتخطى مشكلة NCF حالياً ونركز على TOPSIS
-    system = DietaryExpertSystem(raw_df, train_ncf=False)
+    system = DietaryExpertSystem(raw_df)
 
     profile = UserProfile(
         age=45, height=172, weight=88, gender="male",
@@ -58,10 +47,17 @@ if __name__ == "__main__":
     safe_recipes = result["safe_recipes"]
     print(f"\nعدد الوصفات الآمنة (بعد النظام الخبير): {len(safe_recipes)}")
 
-    # ── 3) إعادة الترتيب بـ TOPSIS (Layer 2) ─────────────────
-    ranked = rank_with_topsis(safe_recipes, profile)
+    # ── 3) إعادة الترتيب بالترتيب المدمج (Layer 2) ────────────
+    ranked = rank_with_topsis(safe_recipes, profile.goal)
 
-    print("\nأفضل 10 وصفات حسب TOPSIS:")
+    print("\nأفضل 10 حسب TOPSIS فقط (القديم):")
+    old = ranked.sort_values("_topsis_score", ascending=False)
     cols = ["Name", "Calories", "ProteinContent", "SugarContent", "_topsis_score"]
+    cols = [c for c in cols if c in old.columns]
+    print(old[cols].head(10).to_string(index=False))
+
+    print("\nأفضل 10 حسب الترتيب المدمج (الجديد):")
+    cols = ["Name", "Calories", "ProteinContent", "SugarContent",
+            "_topsis_score", "_ai_health_score", "_expert_score", "final_score"]
     cols = [c for c in cols if c in ranked.columns]
     print(ranked[cols].head(10).to_string(index=False))
