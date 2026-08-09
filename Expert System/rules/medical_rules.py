@@ -520,6 +520,14 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "warning_rules": {},
         "strict_block": [
             "peanut", "peanuts", "peanut butter", "peanut oil",
+            # 🛠️ إصلاح: "groundnut" مرادف بريطاني/هندي لـ peanut،
+            # كان مفقوداً منذ دمج القوائم فكانت وصفات حقيقية تحتوي
+            # "groundnuts" تتسرب (RecipeId 9878، 521164). النمط يضيف
+            # "s?" تلقائياً فيغطي المفرد والجمع. لم نضف "nutty"/
+            # "peanutty" عمداً — أسماء مثل "Nutty Chocolate Mint Fudge"
+            # مكوّناتها نظيفة، وإضافتها ستُفرط في الحجب (RecipeId
+            # 332170 "nutty rice" غامض وبقي كما هو).
+            "groundnut",
             "almond", "almonds", "almond flour", "almond milk",
             "walnut", "walnuts", "pecan", "pecans",
             "cashew", "cashews", "pistachio", "pistachios",
@@ -572,6 +580,13 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
             "egg powder", "dried egg", "egg solids",
             "albumin", "globulin", "lysozyme", "mayonnaise",
             "meringue", "surimi",
+            # 🛠️ إصلاح: "eggnog" و"eggshell" — فحص قراءة-فقط وجد وصفات
+            # تحتوي "eggnog ice cream" (منتج تجاري فيه بيض) أو
+            # "eggshells" تتسرب لأن \begg\b لا يطابق الصيغ المركّبة
+            # (RecipeId 77596، 77790، 185837، 200057، 262370، 420103،
+            # 90358، 537278). لا يوجد عمود HasEggs في CSV، فالفحص نصي
+            # فقط لهذه الفئة — الحماية هنا أولوية قصوى.
+            "eggnog", "eggshell",
         ],
         "soft_block": [],
         "preferred_ingredients": [

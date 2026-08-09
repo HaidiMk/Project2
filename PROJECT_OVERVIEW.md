@@ -261,11 +261,67 @@ between the recipe embedding and this user vector, normalized to [0, 1]
 
 ---
 
-## 5. Iterative fixes and lessons learned
+## 5. Smart Search (Nlp/) — a UX feature, not a trained model
 
-Four real bugs were found during manual testing, each fixed and verified before
-the next was pursued. This section records what was observed, the root cause,
-and the verification that confirmed the fix.
+**What it is.** `Nlp/` is a search-bar convenience layer added at the repo
+root, next to `Expert System/` and `TOPSIS/`. It wraps a **pretrained
+Sentence-BERT model** (`sentence-transformers/all-MiniLM-L6-v2`, 384-dim
+embeddings) to translate a free-text query such as *"low sugar dinner for
+diabetic"* into structured filters, then hands those filters to the
+**existing, unmodified** `DietaryExpertSystem.filter_recipes()`.
+
+**Architecturally separate from the two trained models.** This module is NOT a
+third trained model and should not be mistaken for one:
+
+- The project's two trained AI components are **Model 1 (health_classifier)**
+  and **Model 2 (word2vec)** — both trained on this project's own data, both
+  contributing *learned* scores to the final ranking blend.
+- `Nlp/` uses a **general-purpose pretrained model with zero fine-tuning on
+  this project's data**. It makes **no safety and no ranking decision of its
+  own**: it only assembles the pieces of a `UserProfile` (conditions,
+  allergies, meal type, macro limits, ...) from the query text and calls the
+  rule engine exactly as any other caller would. Every safety filter, every
+  TOPSIS score, and every learned score comes from the unchanged existing
+  pipeline. Its purpose is purely to make the search bar usable with natural
+  language.
+
+**How it works.** `Nlp/query_parser.py` maps query phrases onto the project's
+own term vocabulary (`Nlp/vocab_terms.py` — disease, allergy, preference, and
+meal-type term lists, kept in sync with `Expert System/core/constants.py`);
+the sentence embeddings are used to resolve free-text fragments to those known
+terms. `Nlp/pipeline.py` exposes `search_recipes(query, profile, system,
+top_n)`, which merges the parsed filters into the caller's base `UserProfile`
+and calls the engine. It never modifies the engine's inputs, rules, or output
+ordering.
+
+**Integration fixes (both entirely inside `Nlp/`).** The module was originally
+written against an older `DietaryExpertSystem` API from before the NCF
+component was replaced by health_classifier. Two mismatches surfaced during
+integration testing, both fixed purely within `Nlp/`:
+
+1. `DietaryExpertSystem(df, train_ncf=False)` — the `train_ncf` parameter no
+   longer exists after NCF removal → fixed to `DietaryExpertSystem(df)`.
+2. `result["ncf_active"]` — no longer present in the engine's result dict →
+   replaced with a **live-derived** `"ai_health_scoring"` flag defined as
+   `"_ai_health_score" in result["safe_recipes"].columns` — i.e. reported from
+   the actual engine output rather than a hardcoded value.
+
+Neither fix required any change inside `Expert System/` — the engine API
+stayed untouched and the module was adapted to it.
+
+**Files:** `pipeline.py`, `query_parser.py`, `vocab_terms.py` (core),
+`check_nlp.py` (internal consistency diagnostic), and five test files
+(`test_query_parser.py`, `test_pipeline.py`, `test_medical_safety.py`,
+`test_robustness.py`, `test_robustness_all.py`). Test commands are in §9.
+
+---
+
+## 6. Iterative fixes and lessons learned
+
+Five real issues were found — four bugs during manual testing and one
+allergen-coverage gap found by a systematic read-only audit — each fixed and
+verified before the next was pursued. This section records what was observed,
+the root cause, and the verification that confirmed the fix.
 
 ### (a) Dislike/negation bug — disliked ingredients treated as liked
 
@@ -380,43 +436,130 @@ is safer than a wrong guess.
 - Full `sanity_check.py` suite passed with outputs byte-identical to baseline;
   the ±0.9192 anchors were unchanged.
 
+### (e) Allergen name-matching gaps found via systematic investigation
+
+**Observed:** A systematic read-only scan of all **6 allergy categories**
+(peanuts, milk, eggs, seafood, soy, gluten) over the full 384,541-recipe
+corpus found a small set of recipes that genuinely contained an allergen in
+their ingredient text yet slipped past every safety net.
+
+**Methodology:** for each category, recipes were checked against (1) the
+column-based check (`HasNuts`, `HasLactose`, `HasSeafood`, `HasSoy`,
+`HasGluten`), (2) the ingredient-text regex, and (3) the name regex. Every
+name-flagged recipe was then classified as **TRUE GAP** (allergen present in
+ingredient text, missed by all three nets), **NAME-ONLY** (allergen-adjacent
+name, ingredients genuinely clean — safe to show), or **AMBIGUOUS**
+(unverifiable data). The classification was deliberately designed to avoid
+over-blocking legitimately safe recipes.
+
+**Root cause — the word-boundary regex.** The engine matches each blocklist
+term as `\bterm\bs?\b` (word boundaries on both sides, optional trailing "s"
+— the documented Scallops fix). This cannot match an allergen word embedded
+inside a larger word or compound: `\bpeanut\b` misses `peanutty`, `\begg\b`
+misses `eggnog`/`eggshell`, and so on.
+
+**Scale and causes — 10 TRUE GAP recipes out of 384,541** (2 peanut, 8 egg),
+concentrated in three distinct word-form causes:
+
+1. **Regional English synonyms** — `groundnut(s)`, the British/Indian term
+   for peanuts (RecipeIds 9878, 521164).
+2. **Compound commercial ingredient names** — `eggnog ice cream` as a single
+   ingredient token (RecipeIds 77596, 77790, 185837, 200057, 262370, 420103).
+3. **Egg-derived ingredient words** — `eggshells` (RecipeIds 90358, 537278).
+
+A structural finding from the same investigation: `cleaned_recipes.csv` has
+**no `HasEggs` column at all** — unlike the other five categories, egg-allergy
+protection relies entirely on text matching, with no column-based safety net.
+(The column map in `halal_and_allergies.py` references `HasEggs`, but no such
+column exists in the data, so the engine's column check for eggs is a no-op.)
+
+**Fix:** three terms added to the single source of truth in
+`Expert System/rules/medical_rules.py` — `groundnut` in
+`MEDICAL_RULES["nut_allergy"]["strict_block"]`, and `eggnog` + `eggshell` in
+`MEDICAL_RULES["egg_allergy"]["strict_block"]`. Both the medical-condition
+filters and the allergy filters (`ALLERGY_RULES` in `halal_and_allergies.py`)
+reuse these exact lists, so no duplication was needed. The pattern builder's
+automatic trailing `s?` covers the plural forms (`groundnuts`, `eggshells`).
+**Deliberate exclusions:** `nutty` and `peanutty` were NOT added — "Nutty
+Chocolate Mint Fudge" and similar NAME-ONLY recipes have genuinely clean
+ingredients, and a prefix/adjacent-form rule would have over-blocked roughly
+2,900 recipes flagged under the audit model (≈2,150 once the engine's
+unconditional halal/pet/non-food filters are accounted for). This mirrors the
+project's conservative-fix philosophy — the same spirit as the Scallops `s?`
+fix and the concept-map membership verification. RecipeId 332170 ("Tandoori
+Pork Saute", whose ingredient text contains "nutty rice") was left untouched
+as AMBIGUOUS.
+
+**Verification:**
+- All 10 target RecipeIds confirmed **blocked** through the real
+  `DietaryExpertSystem` for the relevant allergic profile. (Honest note: five
+  of the ten — the alcoholic eggnog recipes — were in practice already dropped
+  by the engine's unconditional halal ingredient filter via brandy/rum/bourbon
+  terms; the fix guarantees all ten are now blocked through the allergy path
+  itself. The genuinely new protection is five recipes: 9878, 521164, 420103,
+  90358, 537278.)
+- The previously-safe NAME-ONLY recipes — "Peanutty Oatmeal Cookies", "Nutty
+  Chocolate Mint Fudge", "Wild Rice Almondine", "Catfish Almondine",
+  "Eggless Homemade Ice Cream", "Flourless Chocolate Cake", "Wheatberry
+  Salad", ... — confirmed **still available** to the relevant allergic users:
+  no over-blocking.
+- Full 6-category re-scan after the fix: **TRUE GAP = 0** in every category.
+  The `eggnog` term additionally blocks ~200 eggnog-named recipes whose
+  ingredient text shows no egg term (mostly pudding-mix/nutmeg shortcut
+  recipes and incomplete data) — an intended consequence of treating eggnog
+  as egg-containing.
+- `TOPSIS/sanity_check.py` regression suite re-run end-to-end:
+  **byte-identical to baseline** — same safe counts (5,665 / 294,548 /
+  3,019), same score ranges and anchors, **ALL CHECKS PASSED**.
+
 ---
 
-## 6. Repository structure (models)
+## 7. Repository structure (models)
 
-`Expert System/ml/` was split into two clearly-named model folders (the model
-code was previously mixed together in one flat folder):
+The repository root holds three top-level folders: `Expert System/` (rule
+engine + both trained models + data), `TOPSIS/` (goal scoring + the
+`sanity_check.py` regression suite), and `Nlp/` (smart search, §5). Inside
+`Expert System/`, `ml/` was split into two clearly-named model folders (the
+model code was previously mixed together in one flat folder):
 
 ```
-Expert System/
-├── data/                                  # model artifacts (committed, except large ones)
-│   ├── health_classifier.pt               # Model 1 weights
-│   ├── health_scaler.pkl                  # Model 1 input standardizer
-│   ├── health_classifier_labels.json      # 22 condition keys (output order)
-│   ├── health_classifier_thresholds.json  # per-condition tuned thresholds
-│   ├── word2vec_ingredients.model         # Model 2 trained model (~5.3 MB)
-│   └── recipe_taste_embeddings.pkl        # 383,293 recipe vectors (~230 MB, gitignored)
-├── ml/
-│   ├── setup_artifacts.md                 # artifact inventory + regeneration guide (both models)
-│   ├── data/labeled_recipes.csv           # Model 1 training labels (~55 MB, gitignored)
-│   ├── health_classifier/                 # ⭐ Model 1 — multi-label neural classifier
-│   │   ├── build_labels.py                #   soft-label generation (rule × rating)
-│   │   ├── health_classifier.py           #   model definition + training + 70/15/15 split
-│   │   ├── inference.py                   #   ai_health_score (production singleton)
-│   │   ├── tune_thresholds.py             #   per-condition threshold calibration (val only)
-│   │   ├── evaluate_classifier.py         #   test-set reports (flat 0.5 / --tuned)
-│   │   ├── results/                       #   metrics.md / metrics_tuned.md (+ json)
-│   │   └── MODEL_DOCUMENTATION.md         #   detailed Arabic model documentation
-│   └── word2vec/                          # ⭐ Model 2 — ingredient embeddings + taste
-│       ├── build_taste_embeddings.py      #   corpus cleaning + Word2Vec training
-│       ├── taste_concepts.py              #   concept map (43 concepts, vocab-verified)
-│       └── taste_inference.py             #   user text → vector → recipe taste scores
-└── engine/, rules/, ui/, core/            # expert system (unchanged)
+Smart-Dietary-Advisor/                    # repo root
+├── Expert System/                        # rule engine + both trained models
+│   ├── data/                             # model artifacts (committed, except large ones)
+│   │   ├── health_classifier.pt          # Model 1 weights
+│   │   ├── health_scaler.pkl             # Model 1 input standardizer
+│   │   ├── health_classifier_labels.json # 22 condition keys (output order)
+│   │   ├── health_classifier_thresholds.json  # per-condition tuned thresholds
+│   │   ├── word2vec_ingredients.model    # Model 2 trained model (~5.3 MB)
+│   │   └── recipe_taste_embeddings.pkl   # 383,293 recipe vectors (~230 MB, gitignored)
+│   ├── ml/
+│   │   ├── setup_artifacts.md            # artifact inventory + regeneration guide (both models)
+│   │   ├── data/labeled_recipes.csv      # Model 1 training labels (~55 MB, gitignored)
+│   │   ├── health_classifier/            # ⭐ Model 1 — multi-label neural classifier
+│   │   │   ├── build_labels.py           #   soft-label generation (rule × rating)
+│   │   │   ├── health_classifier.py      #   model definition + training + 70/15/15 split
+│   │   │   ├── inference.py              #   ai_health_score (production singleton)
+│   │   │   ├── tune_thresholds.py        #   per-condition threshold calibration (val only)
+│   │   │   ├── evaluate_classifier.py    #   test-set reports (flat 0.5 / --tuned)
+│   │   │   ├── results/                  #   metrics.md / metrics_tuned.md (+ json)
+│   │   │   └── MODEL_DOCUMENTATION.md    #   detailed Arabic model documentation
+│   │   └── word2vec/                     # ⭐ Model 2 — ingredient embeddings + taste
+│   │       ├── build_taste_embeddings.py #   corpus cleaning + Word2Vec training
+│   │       ├── taste_concepts.py         #   concept map (43 concepts, vocab-verified)
+│   │       └── taste_inference.py        #   user text → vector → recipe taste scores
+│   └── engine/, rules/, ui/, core/       # expert system (unchanged)
+├── TOPSIS/                               # goal scoring + sanity_check.py suite
+└── Nlp/                                  # ⭐ smart search — UX feature, NOT a trained model (§5)
+    ├── pipeline.py                       #   search_recipes(): query → filters → engine
+    ├── query_parser.py                   #   free-text → structured filters (embeddings)
+    ├── vocab_terms.py                    #   term lists (synced with core/constants.py)
+    ├── check_nlp.py                      #   internal consistency diagnostic
+    └── test_*.py                         #   five test files (see §9)
 ```
 
 ---
 
-## 7. Known current limitations
+## 8. Known current limitations
 
 Honest account of what the system does not do yet:
 
@@ -442,10 +585,29 @@ Honest account of what the system does not do yet:
 - **Ranking is corpus-bound.** Recommendations are limited to the 384,541
   recipes in the cleaned Food.com corpus; the vocabulary (4,504 tokens) is
   fixed at training time.
+- **Smart search needs a pretrained model download on first use.** `Nlp/`
+  loads `sentence-transformers/all-MiniLM-L6-v2` from Hugging Face, which
+  requires internet access the first time it runs (the model is then cached
+  locally). The embedding model is generic and zero fine-tuned, so query
+  understanding is limited to the fixed term lists in `vocab_terms.py` — it is
+  a UX convenience, not a learned understanding layer.
+- **The eggs allergy category has no protective dataset column.** There is no
+  `HasEggs` column in `cleaned_recipes.csv`, so egg-allergy protection relies
+  entirely on text matching — inherently more fragile than the column-backed
+  categories (`HasNuts`, `HasLactose`, ...), even after the
+  groundnut/eggnog/eggshell fix. A future data pass should add and populate
+  the column, as `halal_and_allergies.py` already assumes it exists.
+- **One known test/engine semantic gap remains (by design).**
+  `test_medical_safety.py` Scenario 2 asserts a strict substring rule
+  (ingredient or name containing "peanut") that is deliberately stricter than
+  the engine's word-boundary regex. Exactly one recipe — "Peanutty Oatmeal
+  Cookies", whose ingredients are genuinely clean (verified) — trips this
+  assertion. It is a NAME-ONLY case, not a real leak, and is documented as
+  known behavior rather than "fixed" by over-broad pattern changes.
 
 ---
 
-## 8. How to verify this yourself
+## 9. How to verify this yourself
 
 **End-to-end regression suite** — run from the `TOPSIS/` folder
 (~15–20 minutes; requires the data artifacts):
@@ -470,6 +632,24 @@ and the concept/fuzzy smoke checks. Expected result: **ALL CHECKS PASSED**.
 cos("I love garlic",    wv["garlic_cloves"]) == +0.9192
 cos("I dislike garlic", wv["garlic_cloves"]) == -0.9192
 ```
+
+**Smart-search (`Nlp/`) tests** — run from the repository root (the first four
+are fast and need no data load; the last two load `cleaned_recipes.csv`,
+~520 MB, and the Sentence-BERT model on first run):
+
+```powershell
+python Nlp/test_query_parser.py      # parser unit checks — PASS
+python Nlp/check_nlp.py              # internal consistency diagnostic — clean
+python Nlp/test_robustness.py        # 20/20 robustness checks
+python Nlp/test_robustness_all.py    # 65/65 robustness checks
+python Nlp/test_pipeline.py          # end-to-end demo (3 free-text queries) — PASS
+python Nlp/test_medical_safety.py    # 4 medical-safety scenarios — 3/4 PASS
+```
+
+Note on `test_medical_safety.py`: Scenario 2 ("peanut-allergic user asks for a
+peanut dish") still reports 1 NAME-ONLY recipe — "Peanutty Oatmeal Cookies",
+ingredients verified clean (see §8). All other scenarios pass, and the
+medical-safety guarantees hold through the real `DietaryExpertSystem`.
 
 **Artifact regeneration** — see `Expert System/ml/setup_artifacts.md` for the
 full inventory (what is committed vs regenerated locally) and the exact
