@@ -582,6 +582,22 @@ Honest account of what the system does not do yet:
   derived from the same clinical rules used for filtering, so the learned task
   is nearly deterministic; the classifier is a learned, graded re-ranking
   signal, not an independent medical oracle.
+- **The classifier's per-feature attributions can mislead off the production
+  distribution.** The diabetes head shows counter-intuitive SHAP signs for
+  ProteinContent (strong negative) and Calories (positive) when scored on
+  arbitrary recipes. Investigation traced these to (i) a learned
+  protein↔calorie-density collinearity (+0.58 corpus correlation; high-protein
+  recipes violate the Calories≤600 gate 5.5× more often), not to anything in the
+  training labels (label–protein correlation ≈ 0), and (ii) non-monotone tail
+  artifacts of the model's extreme decision margins. Within the 24,679-recipe
+  safe-for-diabetes population that health_classifier actually ranks, the same
+  audit shows clinically sensible ordering (standardized coefficients: Calories
+  −0.92, Carbohydrates −0.57, Sugar −0.32; protein slightly favorable at +0.19
+  once confounders are controlled), so real rankings are unaffected and the hard
+  Expert System rules remain the actual safety gate. The SHAP explanation layer
+  (`Expert System/ml/health_classifier/explain.py`) therefore uses deliberately
+  neutral wording for ProteinContent and Calories instead of asserting medical
+  harm.
 - **Ranking is corpus-bound.** Recommendations are limited to the 384,541
   recipes in the cleaned Food.com corpus; the vocabulary (4,504 tokens) is
   fixed at training time.
