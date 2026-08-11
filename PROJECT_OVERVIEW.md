@@ -312,7 +312,7 @@ stayed untouched and the module was adapted to it.
 **Files:** `pipeline.py`, `query_parser.py`, `vocab_terms.py` (core),
 `check_nlp.py` (internal consistency diagnostic), and five test files
 (`test_query_parser.py`, `test_pipeline.py`, `test_medical_safety.py`,
-`test_robustness.py`, `test_robustness_all.py`). Test commands are in §9.
+`test_robustness.py`, `test_robustness_all.py`). Test commands are in §11.
 
 ---
 
@@ -514,13 +514,203 @@ as AMBIGUOUS.
 
 ---
 
-## 7. Repository structure (models)
+## 7. suggest_alternatives() — taste-based safe alternatives (standalone, opt-in)
+
+**What it is.** `Expert System/ml/word2vec/alternatives.py` closes the
+"blocked recipe, then what?" gap: until now, a recipe blocked by an allergen
+or medical-rule violation simply disappeared from the user's results — no
+substitute was offered. Given a blocked recipe and a user's own already
+computed safe set (the output of
+`DietaryExpertSystem.filter_recipes()['safe_recipes']`), it ranks that safe
+set by taste similarity to the blocked recipe and returns the top-N as
+suggested alternatives.
+
+**Medical safety is inherited, not re-implemented.** Candidates are drawn
+ONLY from the caller-supplied safe set — no recipe outside the user's safe
+frame can ever be returned. The module adds no safety logic of its own; it
+can only recommend recipes the existing pipeline already cleared.
+
+**Method.** Cosine similarity between the blocked recipe's L2-normalized
+Word2Vec taste embedding and each candidate's embedding, vectorized against
+one process-wide aligned matrix of all 383,293 available recipe embeddings
+(`recipe_taste_embeddings.pkl`). When taste similarity cannot be trusted,
+the module automatically switches to a nutrition-only fallback: z-scored
+Euclidean distance over the same 9 `NUTRITION_COLS` used by
+health_classifier (corpus mean/std cached from `cleaned_recipes.csv`),
+scored as `1 / (1 + distance)` so that higher = more similar.
+
+**The three safeguards:**
+
+1. **Sparse-ingredient recipes bypass taste similarity automatically.** The
+   exploration PoC found that recipes with very few in-vocab ingredient
+   tokens (e.g. a 2-ingredient list) produce flat, near-tied taste rankings
+   that are nutritionally nonsensical — the scores differ only in the noise
+   digits. A blocked recipe with no embedding, or with fewer than
+   `min_vocab_tokens` (default 4) in-vocab tokens, therefore takes the
+   nutrition fallback instead, and the returned `"method"` field tells the
+   caller which path fired. (The fallback also fires if the taste path finds
+   zero eligible candidates, i.e. none of the safe recipes have embeddings.)
+2. **Deterministic tie-breaking.** Real corpus embeddings produce near-tied
+   cosine scores; scores within 1e-4 of each other are sub-ordered by
+   ascending z-scored nutrition distance, so the output order never depends
+   on dict/array iteration order.
+3. **Self-exclusion.** The blocked recipe's own RecipeId is always removed
+   from its alternatives, and safe-set rows with unparseable RecipeIds are
+   dropped before ranking.
+
+Input validation follows the project's explain.py discipline: missing
+required columns or non-numeric nutrition values raise `ValueError` —
+nothing is silently imputed.
+
+**API shape.** `suggest_alternatives(blocked_recipe, safe_recipes_df,
+top_n=3, min_vocab_tokens=4) -> dict` — `blocked_recipe` is a pandas Series,
+one-row DataFrame, or plain dict supplying `RecipeId`, `Name`,
+`IngredientsList`, and the 9 nutrition columns; `safe_recipes_df` must
+contain `RecipeId`, `Name`, and the same 9 nutrition columns. Returns a
+JSON-serializable dict: `"method"` (`"taste_similarity"` or
+`"nutrition_fallback"`), `"blocked_recipe"` (RecipeId + Name),
+`"requested_top_n"`, `"returned_count"` (may be under `top_n` when the safe
+set is small), `"reason"` (non-empty whenever `returned_count < top_n`, and
+a clear explanation — never an exception — when the safe set yields no
+candidates at all), and `"alternatives"`: up to `top_n` entries of
+`{RecipeId, Name, score, Calories, ProteinContent}`.
+
+**Standalone and opt-in.** Nothing in the scoring/ranking pipeline imports
+this file; a backend calls `suggest_alternatives()` explicitly as a
+separate endpoint — the same integration pattern as
+`explain_health_score()`.
+
+**Verification.** `test_alternatives.py` runs three real blocked-recipe
+cases against a peanut-allergic profile's safe set: two well-populated
+peanut recipes ("Creamy Peanut Dessert", RecipeId 508281, and "Super Easy
+Peanut Noodles", RecipeId 220974) that exercise the `taste_similarity` path,
+and RecipeId 218 — a deliberately ingredient-poor recipe (a 2-ingredient
+list) that must automatically come back `"method": "nutrition_fallback"`.
+Ranking is fully vectorized (no per-element Python loop, tie-break
+included), so querying the whole safe set is fast.
+
+---
+
+## 8. meal_planner — daily & weekly meal-plan builder (standalone, opt-in)
+
+**What it is.** `Expert System/planner/meal_planner.py` closes the "one
+recipe at a time" gap: the pipeline returns a single ranked list, but users
+want a full balanced day (and week) that hits their calorie target without
+repeated recipes or conflicting meals. The planner assembles breakfast +
+lunch + dinner — one recipe per slot, no repeats, summed calories inside a
+tolerance band of the day target — and chains days into a full week with
+global no-repeat.
+
+**Composed entirely from existing pipeline pieces.** It reuses
+`UserProfile`'s calorie math, `DietaryExpertSystem.filter_recipes()`
+(medical safety), and `topsis_model.rank_with_topsis()` (TOPSIS/AI/expert
+ranking). No new model, no training, and no modification to the
+scoring/ranking pipeline; nothing in the pipeline imports it (same opt-in
+integration pattern as `explain_health_score()` and
+`suggest_alternatives()`).
+
+**Key design decisions** (each validated by the meal-planner feasibility
+investigation that preceded the build):
+
+1. **Day target = 3 × the engine's per-meal target, NOT raw
+   `UserProfile.daily_calories`.** `filter_recipes()` returns
+   `target_meal_calories` (TDEE/3 plus the goal's calorie offset) — already
+   the achievable per-meal number. Raw TDEE is structurally unreachable for
+   medically-capped profiles: the diabetic test profile (45yo/172cm/88kg
+   male, light activity) has TDEE 2386 kcal, but medical per-recipe calorie
+   caps mean a 3-meal day can never exceed about 1797 kcal. Building the day
+   against raw TDEE would force an impossible number.
+2. **Calorie-stratified candidate selection instead of plain top-K ranked.**
+   Each slot's candidate pool is the top-ranked recipe per calorie band —
+   3 bands spanning the pool's own calorie range, up to `top_k_per_band`
+   (default 40) per band, i.e. up to 120 candidates per slot. Plain top-K
+   ranked was proven to fail: under calorie-reducing goals (weight_loss
+   pulls low-calorie recipes to the top of every slot) it discards every
+   high-calorie candidate, so the investigation found ZERO valid
+   combinations from a 3-slot top-K pool.
+3. **Graceful degradation instead of errors or forced numbers.** Profiles
+   that cannot reach the target even with a relaxed tolerance get the
+   closest achievable day with `"target_reached": false` and an honest,
+   specific `"warning"` that names the binding rule (e.g. the per-recipe
+   calories cap) and the actual shortfall. Neither planner function ever
+   raises on an unachievable plan.
+4. **Global no-repeat — and the lunch/dinner pool finding.** lunch and
+   dinner draw from the IDENTICAL underlying MealType pool ("MainDish" per
+   `filtering_engine.MEAL_TYPE_DATA_MAP`), so "no repeats" cannot be
+   enforced per meal type — it is enforced globally across all three slots
+   of every day, and across the entire week in weekly plans. A slot whose
+   pool is exhausted by exclusion falls back to its full pool and is
+   reported in `"reused_slots"`/`"note"` — never silently.
+5. **Tolerance, relaxation, and in-band selection.** The default day
+   tolerance is ±15% (±10% was found to support too few valid combinations
+   to fill a 7-day week; ±15% supports 7 no-repeat days for moderately
+   constrained profiles). If no combination fits, the planner first retries
+   at tolerance + 0.10 (up to the hard cap of 0.40) and only then degrades
+   to the closest achievable day. Inside a valid band, combinations are
+   preferred 70% by mean `final_score` (ranking quality) and 30% by
+   closeness of the summed calories to the target — pure best-rank selection
+   clusters at the low end of the band, while pure calorie fit would ignore
+   ranking quality.
+6. **The 4th "snack" slot — investigated and rejected on evidence.** For
+   the constrained test profile (diabetes + high_cholesterol + muscle_gain),
+   per-recipe caps limit a 3-meal day to about 1500 kcal against a roughly
+   2900 kcal target. A tested 4th "snack" slot closes at most about 480 kcal
+   of that gap — the day would still land roughly 900 kcal short. Because
+   the gap is structural (medical per-recipe caps, not a selection
+   shortcoming), the planner does not pretend a 4th slot solves it; it
+   returns the closest achievable 3-meal day with an honest warning.
+
+**API shape.**
+
+- `build_daily_plan(profile, system=None, tolerance=0.15,
+  top_k_per_band=40, exclude_recipe_ids=None, user_taste_text=None) -> dict`
+  — the profile's `meal_type` attribute is IGNORED (a copy is made and set
+  per slot internally); the planner always builds breakfast + lunch +
+  dinner. Returns a JSON-serializable dict: `day_target_calories`,
+  `actual_calories`, `target_reached`, `tolerance_requested`,
+  `tolerance_used` (None when only the closest achievable day exists),
+  `warning`, `note`, `meals` (one entry per slot with RecipeId, Name, the
+  full nutrition columns, and `final_score`), `totals`
+  (Calories/Protein/Sugar/Fiber), `candidate_pools`, `reused_slots`.
+- `build_weekly_plan(profile, days=7, tolerance=0.15, system=None,
+  top_k_per_band=40, user_taste_text=None) -> dict` — same parameters; the
+  three slot pipelines run ONCE and the pools are reused across all days.
+  Each day carries a `day_index`; the `summary` block reports
+  `days_requested`, `days_returned`, `distinct_recipes_used`,
+  `forced_repeat_slots`, `days_target_reached`,
+  `avg_target_achievement_pct`, and `avg_actual_calories`.
+
+For the backend: construct the `DietaryExpertSystem` once (loading the
+384k-row dataset takes several seconds) and pass it via `system`; with
+`system=None` the module reloads the dataset on every call.
+
+**Verification.** `test_meal_planner.py` exercises both sides of the design:
+the reachable-target profile (45yo diabetic male, weight_loss — TDEE 2386
+but capped at about 1797 kcal/day) whose daily plan returns
+`"target_reached": true`, and the constrained profile (30yo male,
+diabetes + high_cholesterol, muscle_gain — about 1500 kcal achievable vs
+roughly 2900 kcal target) whose daily plan is expected to return
+`"target_reached": false` with the honest warning. For the reachable
+profile's 7-day weekly plan, the module's own documented reference summary
+reports 21 distinct recipes used (7 days × 3 slots), 0 forced-repeat slots,
+7/7 days reaching the target, about 96.2 % average target achievement, and
+about 1840 kcal average daily calories. The combination search itself is
+fully vectorized (per-dinner-row 2-D block math over the paired
+breakfast/lunch matrices), so even the exhaustive closest-mode search over
+120³ candidates runs in well under a second (as documented in the code).
+
+---
+
+## 9. Repository structure (models)
 
 The repository root holds three top-level folders: `Expert System/` (rule
-engine + both trained models + data), `TOPSIS/` (goal scoring + the
+engine + both trained models + data + the `planner/` meal-plan layer),
+`TOPSIS/` (goal scoring + the
 `sanity_check.py` regression suite), and `Nlp/` (smart search, §5). Inside
 `Expert System/`, `ml/` was split into two clearly-named model folders (the
-model code was previously mixed together in one flat folder):
+model code was previously mixed together in one flat folder), and
+`planner/` (§8) was added later as a standalone composition layer that
+builds on the unchanged pipeline rather than modifying it:
 
 ```
 Smart-Dietary-Advisor/                    # repo root
@@ -546,7 +736,11 @@ Smart-Dietary-Advisor/                    # repo root
 │   │   └── word2vec/                     # ⭐ Model 2 — ingredient embeddings + taste
 │   │       ├── build_taste_embeddings.py #   corpus cleaning + Word2Vec training
 │   │       ├── taste_concepts.py         #   concept map (43 concepts, vocab-verified)
-│   │       └── taste_inference.py        #   user text → vector → recipe taste scores
+│   │       ├── taste_inference.py        #   user text → vector → recipe taste scores
+│   │       └── alternatives.py           #   suggest_alternatives() — taste-similar safe alternatives (opt-in)
+│   ├── planner/                          # ⭐ meal-plan builder — standalone, opt-in (§8)
+│   │   ├── meal_planner.py               #   build_daily_plan / build_weekly_plan
+│   │   └── __init__.py                   #   package marker
 │   └── engine/, rules/, ui/, core/       # expert system (unchanged)
 ├── TOPSIS/                               # goal scoring + sanity_check.py suite
 └── Nlp/                                  # ⭐ smart search — UX feature, NOT a trained model (§5)
@@ -554,12 +748,12 @@ Smart-Dietary-Advisor/                    # repo root
     ├── query_parser.py                   #   free-text → structured filters (embeddings)
     ├── vocab_terms.py                    #   term lists (synced with core/constants.py)
     ├── check_nlp.py                      #   internal consistency diagnostic
-    └── test_*.py                         #   five test files (see §9)
+    └── test_*.py                         #   five test files (see §11)
 ```
 
 ---
 
-## 8. Known current limitations
+## 10. Known current limitations
 
 Honest account of what the system does not do yet:
 
@@ -620,10 +814,28 @@ Honest account of what the system does not do yet:
   Cookies", whose ingredients are genuinely clean (verified) — trips this
   assertion. It is a NAME-ONLY case, not a real leak, and is documented as
   known behavior rather than "fixed" by over-broad pattern changes.
+- **`suggest_alternatives()` quality depends on the blocked recipe's
+  ingredient detail.** The taste-similarity path needs a recipe embedding
+  and at least `min_vocab_tokens` (default 4) in-vocab ingredient tokens;
+  sparse or out-of-vocabulary recipes automatically fall back to
+  nutrition-only similarity — the same 9 columns health_classifier uses,
+  useful but lower-fidelity (it matches "similar nutrition", not "similar
+  taste"), and the `"method"` field reports which path fired. The module
+  can also only ever return recipes from the caller's safe set: a small
+  safe set yields few options, and an empty one yields no alternatives
+  (with a clear reason, never an error).
+- **`meal_planner` cannot reach the calculated daily target for
+  medically-constrained profiles.** Where per-recipe calorie caps (e.g.
+  diabetes) create a hard ceiling below the day target, no 3-meal
+  combination can hit it — the planner returns the closest achievable day
+  with `"target_reached": false` and a warning that names the binding rule
+  and the shortfall (see §8, design decision 3). This is a known, expected,
+  and honestly-reported behavior — the alternative would be ignoring the
+  medical caps — not a bug.
 
 ---
 
-## 9. How to verify this yourself
+## 11. How to verify this yourself
 
 **End-to-end regression suite** — run from the `TOPSIS/` folder
 (~15–20 minutes; requires the data artifacts):
@@ -664,8 +876,25 @@ python Nlp/test_medical_safety.py    # 4 medical-safety scenarios — 3/4 PASS
 
 Note on `test_medical_safety.py`: Scenario 2 ("peanut-allergic user asks for a
 peanut dish") still reports 1 NAME-ONLY recipe — "Peanutty Oatmeal Cookies",
-ingredients verified clean (see §8). All other scenarios pass, and the
+ingredients verified clean (see §10). All other scenarios pass, and the
 medical-safety guarantees hold through the real `DietaryExpertSystem`.
+
+**Standalone module smoke tests** — run from the repository root (both load
+`cleaned_recipes.csv`, ~520 MB, on startup; the corpus load takes several
+seconds and only once per run):
+
+```powershell
+python "Expert System/ml/word2vec/test_alternatives.py"   # 3 blocked peanut recipes — 2 taste-similar + 1 nutrition fallback
+python "Expert System/planner/test_meal_planner.py"       # daily plans (reachable + degraded) + 7-day weekly plan
+```
+
+`suggest_alternatives()` output is self-describing: each case's `"method"`
+field states whether taste similarity or the nutrition fallback fired, and
+the 2-ingredient blocked recipe (RecipeId 218) is expected to come back
+`"method": "nutrition_fallback"` (see §7). For the planner, the constrained
+profile's daily plan is expected to show `"target_reached": false` with an
+honest `"warning"` — the documented degradation behavior, not a bug (see
+§8).
 
 **Artifact regeneration** — see `Expert System/ml/setup_artifacts.md` for the
 full inventory (what is committed vs regenerated locally) and the exact
