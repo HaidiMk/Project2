@@ -12,6 +12,10 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
+# Import side-effect: extends sys.path with the AI project folders
+# (Expert System/, TOPSIS/, Nlp/) so they can be imported from Django code.
+from . import ai_bridge  # noqa: F401
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
