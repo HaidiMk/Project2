@@ -1,0 +1,20 @@
+# Django REST API (core of this project)
+Django==6.0.5
+djangorestframework
+django-cors-headers
+
+# AI project dependencies (Expert System / TOPSIS / Nlp)
+# numpy + pandas are needed by every AI module
+numpy
+pandas
+# Health classifier (ml/health_classifier): model weights + StandardScaler
+torch
+joblib
+scikit-learn
+# Word2Vec taste embeddings + alternatives (ml/word2vec)
+gensim
+rapidfuzz
+# SHAP explanation layer (ml/health_classifier/explain.py)
+shap
+# NL search semantic matching (Nlp/query_parser.py)
+sentence-transformers
