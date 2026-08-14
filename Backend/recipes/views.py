@@ -376,3 +376,60 @@ class SearchView(APIView):
             "filters_applied": search_result["filters"],
             "results": results,
         })
+        
+class AlternativesView(APIView):
+    """
+    GET /api/recipes/<recipe_id>/alternatives/
+    يعتمد على الموارد الموجودة (الفلترة والترتيب) لاقتراح أفضل 3 بدائل.
+    """
+    permission_classes = [IsAuthenticated]
+
+    RESULT_COLUMNS = [
+        "RecipeId", "Name", "Calories", "ProteinContent",
+        "CarbohydrateContent", "SugarContent", "FiberContent",
+        "final_score"
+    ]
+
+    def get(self, request, recipe_id, *args, **kwargs):
+        try:
+            django_profile = request.user.profile
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"detail": "Complete your health profile before requesting alternatives."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            ai_profile = translate_profile(django_profile)
+        except ProfileTranslationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            expert_system = get_cached_expert_system()
+            result = expert_system.filter_recipes(ai_profile)
+            safe_df = result["safe_recipes"]
+
+            safe_df = safe_df[safe_df['RecipeId'] != recipe_id]
+
+            ranked = rank_with_topsis(safe_df, ai_profile.goal)
+
+            columns = [c for c in self.RESULT_COLUMNS if c in ranked.columns]
+            top_alternatives = ranked[columns].head(3)
+
+            results = [
+                {k: json_safe(v) for k, v in row.items()}
+                for row in top_alternatives.to_dict("records")
+            ]
+
+            return Response({
+                "original_recipe_id": recipe_id,
+                "alternatives_count": len(results),
+                "results": results
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Alternatives generation failed for recipe_id=%s", recipe_id)
+            return Response(
+                {"detail": "Internal error while generating alternatives."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )        
