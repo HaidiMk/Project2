@@ -28,3 +28,5 @@ class RecipesConfig(AppConfig):
             _background(ai_runtime.get_expert_system)
         if ai_runtime.AI_EAGER_EXPLAIN_WARMUP:
             _background(ai_runtime.warm_up_explainer)
+        if ai_runtime.AI_EAGER_NLP_WARMUP:
+            _background(ai_runtime.warm_up_nlp_search)

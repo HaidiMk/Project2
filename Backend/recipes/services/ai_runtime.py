@@ -17,6 +17,10 @@ Two opt-in environment flags (both default to UNSET = lazy behavior):
         ready() instead of on the first request.
     AI_EAGER_EXPLAIN_WARMUP
         Same idea for the SHAP explainer warmup (one-time ~8 s cost).
+    AI_EAGER_NLP_WARMUP
+        Same idea for the Nlp/ search-query parser's Sentence-BERT model
+        (all-MiniLM-L6-v2). Requires internet access the first time it runs,
+        same as documented in Nlp/query_parser.py.
 
 Usage::
 
@@ -39,6 +43,9 @@ _expert_system_lock = threading.Lock()
 _explainer_warmed = False
 _explainer_lock = threading.Lock()
 
+_nlp_warmed = False
+_nlp_lock = threading.Lock()
+
 
 def _env_flag(name: str) -> bool:
     """Truthy env flags: '1', 'true', 'yes', 'on' (case-insensitive). Default False."""
@@ -48,6 +55,7 @@ def _env_flag(name: str) -> bool:
 # Public flag values, read once at import time so apps.py and callers agree.
 AI_EAGER_WARMUP = _env_flag("AI_EAGER_WARMUP")
 AI_EAGER_EXPLAIN_WARMUP = _env_flag("AI_EAGER_EXPLAIN_WARMUP")
+AI_EAGER_NLP_WARMUP = _env_flag("AI_EAGER_NLP_WARMUP")
 
 
 def _build_expert_system():
@@ -91,3 +99,25 @@ def warm_up_explainer() -> None:
             from ml.health_classifier.explain import warm_up
             warm_up()
             _explainer_warmed = True
+
+
+def warm_up_nlp_search() -> None:
+    """One-time warmup of the Nlp/ search-query parser's Sentence-BERT model.
+
+    Calls the module's real public entry point (parse_query) with a short
+    phrase that reaches the semantic-matching step, so the same lazy
+    singleton Nlp/query_parser.py already owns gets loaded here instead of
+    on the first real search request. The singleton itself stays inside
+    Nlp/ — this function only triggers it early.
+
+    Safe to call any number of times: warmed at most once per process, and
+    only after it succeeds is the flag set — a failed attempt (e.g. no
+    internet on first run) is retried on the next call."""
+    global _nlp_warmed
+    if _nlp_warmed:
+        return
+    with _nlp_lock:
+        if not _nlp_warmed:
+            from Nlp.query_parser import parse_query
+            parse_query("chicken breakfast")
+            _nlp_warmed = True

@@ -199,9 +199,30 @@ PREFERENCE_ALIASES: Dict[str, str] = {
     "keto":             "low_carb",
     "lowcarb":          "low_carb",
     "low-carb":         "low_carb",
+    "low carb":         "low_carb",
     "mediterranean diet": "mediterranean",
     "no preference":    "no_preference",
     "none":             "no_preference",
+    # No dedicated block exists for these — mapped to no_preference (zero
+    # ingredient exclusions) rather than a restrictive block like low_carb,
+    # since none of them actually asked to have foods excluded. "high
+    # protein"/"low sugar" are macro targets already handled by `goal`'s
+    # score_weights, not ingredient-exclusion preferences.
+    "high protein":     "no_preference",
+    "low sugar":        "no_preference",
+    "healthy":          "no_preference",
+    "healthy eating":   "no_preference",
+    "omnivore":         "no_preference",
+    # Real dietary terms missing from the vocabulary entirely.
+    "pescatarian":      "seafood_lover",
+    "pescetarian":      "seafood_lover",
+    "chicken only":     "chicken_lover",
+    "poultry only":     "chicken_lover",
+    # Deliberately NOT mapped: "gluten free" / "dairy free" / "nut free".
+    # These are allergen exclusions (belong in the `allergies` field, see
+    # ALLERGY_ALIASES) — no PREFERENCE_BLOCKS entry covers them, and
+    # silently mapping them to no_preference would silently drop a stated
+    # dietary restriction instead of raising. Left to raise, on purpose.
 }
 
 # Activity vocabulary is shared VERBATIM between Django's ActivityLevel
