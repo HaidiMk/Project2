@@ -67,6 +67,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from ml.health_classifier.explain import explain_health_score
 
 # MEAL_TYPE_DATA_MAP keys are the per-request meal vocabulary the engine
 # actually understands (breakfast -> Breakfast, lunch/dinner -> MainDish);
@@ -264,10 +265,7 @@ class SearchView(APIView):
     DEFAULT_LIMIT = 20
     MAX_LIMIT = 100
 
-    # Oversized on purpose: bigger than the ~384,541-recipe corpus, so
-    # Nlp.pipeline.search_recipes() returns its FULL filtered set instead of
-    # truncating (by _expert_score) before we get a chance to rank with
-    # TOPSIS. See the class docstring, step 4.
+    
     _NLP_PRERANK_LIMIT = 500_000
 
     RESULT_COLUMNS = [
@@ -378,10 +376,7 @@ class SearchView(APIView):
         })
         
 class AlternativesView(APIView):
-    """
-    GET /api/recipes/<recipe_id>/alternatives/
-    يعتمد على الموارد الموجودة (الفلترة والترتيب) لاقتراح أفضل 3 بدائل.
-    """
+   
     permission_classes = [IsAuthenticated]
 
     RESULT_COLUMNS = [
@@ -432,4 +427,75 @@ class AlternativesView(APIView):
             return Response(
                 {"detail": "Internal error while generating alternatives."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )        
+            )   
+class ExplanationView(APIView):
+   
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, recipe_id, *args, **kwargs):
+        try:
+            django_profile = request.user.profile
+            ai_profile = translate_profile(django_profile)
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"detail": "Complete your health profile first."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except ProfileTranslationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # 1. جلب بيانات الوجبة من الـ DataFrame المحمل بالذاكرة
+            expert_system = get_cached_expert_system()
+            
+            # (ملاحظة: إذا رفيقتك مسمية الداتا فريم recipes_df بدل df، عدلي الكلمة هنا)
+            if not hasattr(expert_system, 'df'):
+                return Response(
+                    {"detail": "Dataframe attribute missing in expert system."}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+            recipe_row = expert_system.df[expert_system.df['RecipeId'] == recipe_id]
+            
+            if recipe_row.empty:
+                return Response({"detail": "Recipe not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+            # تحويل بيانات الوجبة لـ Dictionary ليفهمها كود الـ AI
+            recipe_data = recipe_row.iloc[0].to_dict()
+
+            # 2. الشروط الطبية للمريض
+            condition_keys = list(ai_profile.conditions) if ai_profile.conditions else []
+
+            # إذا المريض سليم تماماً، ما في داعي للتفسير الطبي المعقد
+            if not condition_keys:
+                 return Response({
+                    "recipe_id": recipe_id,
+                    "is_safe": True,
+                    "reasons": ["ملفك الصحي لا يحتوي على أمراض مزمنة، لذلك هذه الوجبة مناسبة لك تماماً."]
+                 }, status=status.HTTP_200_OK)
+
+            # 3. استدعاء دالة التفسير الذكية من ملف رفيقتك
+            explanation_data = explain_health_score(recipe=recipe_data, condition_keys=condition_keys, top_n=3)
+
+            # 4. تجميع النصوص (text) من الرد لتكون جاهزة للفرونت اند
+            reasons = []
+            explanations = explanation_data.get("condition_explanations", {})
+            for cond, details in explanations.items():
+                for reason in details.get("top_reasons", []):
+                    reasons.append(reason.get("text"))
+
+            if not reasons:
+                 reasons.append("تم فحص الوجبة والتأكد من مطابقتها لقيودك الطبية.")
+
+            return Response({
+                "recipe_id": recipe_id,
+                "is_safe": True,
+                "reasons": reasons
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Explanation failed for recipe_id=%s", recipe_id)
+            return Response(
+                {"detail": "Internal error while generating explanation."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
