@@ -99,7 +99,7 @@ class RecommendationsView(APIView):
     # with the per-source scores for transparency). Filtered by what the
     # ranked frame actually contains (e.g. no _taste_score without taste_text).
     RESULT_COLUMNS = [
-        "RecipeId", "Name", "Calories", "ProteinContent",
+        "RecipeId", "Name", "ImageUrl", "Calories", "ProteinContent",
         "CarbohydrateContent", "SugarContent", "FiberContent",
         "final_score", "_topsis_score", "_ai_health_score",
         "_expert_score", "_taste_score",
@@ -269,7 +269,7 @@ class SearchView(APIView):
     _NLP_PRERANK_LIMIT = 500_000
 
     RESULT_COLUMNS = [
-        "RecipeId", "Name", "Calories", "ProteinContent",
+        "RecipeId", "Name", "ImageUrl", "Calories", "ProteinContent",
         "CarbohydrateContent", "SugarContent", "FiberContent",
         "final_score", "_topsis_score", "_ai_health_score",
         "_expert_score", "_taste_score",
@@ -380,7 +380,7 @@ class AlternativesView(APIView):
     permission_classes = [IsAuthenticated]
 
     RESULT_COLUMNS = [
-        "RecipeId", "Name", "Calories", "ProteinContent",
+        "RecipeId", "Name", "ImageUrl", "Calories", "ProteinContent",
         "CarbohydrateContent", "SugarContent", "FiberContent",
         "final_score"
     ]
@@ -499,3 +499,92 @@ class ExplanationView(APIView):
                 {"detail": "Internal error while generating explanation."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class RecipeDetailView(APIView):
+    """
+    GET /api/recipes/<int:recipe_id>/ — full detail for a single recipe
+    ==========================================================================
+
+    Pipeline:
+        1. Load request.user.profile, translate_profile() (identical to the
+           other views; 404/400 on the same conditions).
+        2. Look up the row by RecipeId directly in the cached expert system's
+           in-memory DataFrame (same access pattern ExplanationView already
+           uses) -> 404 if the id isn't present in the live corpus (whether
+           it never existed there, or was dropped during cleaning).
+        3. Run the user's profile through the same cached filter_recipes()
+           every other endpoint uses (recipes/services/filter_cache.py) to
+           determine whether THIS recipe survives the Expert System's safety
+           filters for THIS user -> is_safe.
+        4. Serialize every column the live corpus carries for this recipe
+           (all 41 columns of cleaned_recipes.csv, including ImageUrl/
+           ImagesCount/ImagesJson) to native JSON types.
+
+    Response shape:
+        {
+            "recipe_id": int,
+            "is_safe":   bool,
+            "recipe":    { <all columns>, native JSON types, NaN -> None }
+        }
+
+    Errors:
+        400  ProfileTranslationError (translator message passed through)
+        401/403  unauthenticated
+        404      no stored UserProfile yet, OR recipe_id not present in the
+                 live corpus
+        500      any unexpected AI-layer error — logged server-side, generic
+                 message returned (no stack trace leaked to the client)
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, recipe_id, *args, **kwargs):
+        # --- 1. the user's stored profile -------------------------------------
+        try:
+            django_profile = request.user.profile
+        except UserProfile.DoesNotExist:
+            return Response(
+                {"detail": "Complete your health profile before requesting "
+                           "recipe details."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            ai_profile = translate_profile(django_profile)
+        except ProfileTranslationError as exc:
+            return Response({"detail": str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            expert_system = get_cached_expert_system()
+
+            # --- 2. row lookup -------------------------------------------------
+            recipe_row = expert_system.df[expert_system.df["RecipeId"] == recipe_id]
+            if recipe_row.empty:
+                return Response({"detail": "Recipe not found."},
+                                status=status.HTTP_404_NOT_FOUND)
+            recipe_data = {
+                k: json_safe(v) for k, v in recipe_row.iloc[0].to_dict().items()
+            }
+
+            # --- 3. safety check for this user ---------------------------------
+            result = expert_system.filter_recipes(ai_profile)
+            safe_ids = set(result["safe_recipes"]["RecipeId"])
+            is_safe = recipe_id in safe_ids
+        except Exception:
+            logger.exception(
+                "Recipe detail lookup failed for user %s (recipe_id=%s)",
+                getattr(request.user, "username", "?"), recipe_id,
+            )
+            return Response(
+                {"detail": "Internal error while fetching recipe details."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # --- 4. serialize --------------------------------------------------------
+        return Response({
+            "recipe_id": recipe_id,
+            "is_safe": is_safe,
+            "recipe": recipe_data,
+        })

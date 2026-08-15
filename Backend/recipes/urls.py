@@ -1,6 +1,12 @@
 from django.urls import path
 
-from .views import RecommendationsView, SearchView ,AlternativesView , ExplanationView
+from .views import (
+    AlternativesView,
+    ExplanationView,
+    RecipeDetailView,
+    RecommendationsView,
+    SearchView,
+)
 
 app_name = "recipes"
 
@@ -9,4 +15,5 @@ urlpatterns = [
     path("search/", SearchView.as_view(), name="search"),
     path("<int:recipe_id>/alternatives/", AlternativesView.as_view(), name="recipe-alternatives"),
     path("<int:recipe_id>/explanation/", ExplanationView.as_view(), name="recipe-explanation"),
+    path("<int:recipe_id>/", RecipeDetailView.as_view(), name="recipe-detail"),
 ]

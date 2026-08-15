@@ -112,6 +112,8 @@ class SearchViewTests(TestCase):
             self.assertIn(key, data)
         self.assertLessEqual(data["count"], 5)
         self.assertEqual(data["filters_applied"]["main_ingredient"], "chicken")
+        self.assertTrue(data["results"])
+        self.assertTrue(all("ImageUrl" in r for r in data["results"]))
 
     def test_meal_type_explicit_param_wins_when_no_conflict(self):
         resp = self._get(query="chicken", meal_type="breakfast")
@@ -192,6 +194,8 @@ class SearchViewTests(TestCase):
         data = resp.json()
         for key in ("count", "total_safe", "total_original", "meal_type", "results"):
             self.assertIn(key, data)
+        self.assertTrue(data["results"])
+        self.assertTrue(all("ImageUrl" in r for r in data["results"]))
 
     # ------------------------------------------------------------------ #
     # filter_cache integration — repeat requests for the same profile
@@ -391,3 +395,173 @@ class PreferenceAliasTests(TestCase):
             with self.subTest(phrase=phrase):
                 with self.assertRaises(ProfileTranslationError):
                     translate_profile(self._django_profile([phrase]))
+
+
+class RecipeDetailViewTests(TestCase):
+    """
+    GET /api/recipes/<int:recipe_id>/ — full recipe detail + per-user
+    is_safe flag (recipes/views.py: RecipeDetailView).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.expert_system = ai_runtime.get_expert_system()
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = _make_user_with_profile("detailuser")
+        token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        filter_cache.clear_cache()
+        self.real_recipe_id = int(self.expert_system.df["RecipeId"].iloc[0])
+
+    def _url(self, recipe_id):
+        return f"/api/recipes/{recipe_id}/"
+
+    # ------------------------------------------------------------------ #
+    # error paths
+    # ------------------------------------------------------------------ #
+    def test_unauthenticated_is_401(self):
+        client = APIClient()
+        resp = client.get(self._url(self.real_recipe_id))
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_no_profile_is_404(self):
+        user2 = User.objects.create_user(username="detailnoprofile", password="pass12345")
+        token2 = Token.objects.create(user=user2)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {token2.key}")
+        resp = client.get(self._url(self.real_recipe_id))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_profile_translation_error_is_400(self):
+        self.user.profile.conditions = ["not_a_real_condition"]
+        self.user.profile.save()
+        resp = self.client.get(self._url(self.real_recipe_id))
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("conditions", resp.json()["detail"])
+
+    def test_recipe_not_in_corpus_is_404(self):
+        # Guaranteed absent: bigger than any real RecipeId in the live corpus.
+        missing_id = int(self.expert_system.df["RecipeId"].max()) + 999_999
+        resp = self.client.get(self._url(missing_id))
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.json()["detail"], "Recipe not found.")
+
+    def test_unexpected_ai_error_is_500(self):
+        real_system = ai_runtime.get_expert_system()
+        with patch.object(real_system, "filter_recipes",
+                           side_effect=RuntimeError("boom")):
+            resp = self.client.get(self._url(self.real_recipe_id))
+        self.assertEqual(resp.status_code, 500)
+
+    # ------------------------------------------------------------------ #
+    # happy paths / contract shape
+    # ------------------------------------------------------------------ #
+    def test_happy_path_returns_all_columns(self):
+        resp = self.client.get(self._url(self.real_recipe_id))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        for key in ("recipe_id", "is_safe", "recipe"):
+            self.assertIn(key, data)
+        self.assertEqual(data["recipe_id"], self.real_recipe_id)
+        recipe = data["recipe"]
+        for col in ("RecipeId", "Name", "ImageUrl", "ImagesCount", "ImagesJson",
+                    "Calories", "HealthScore", "MealType"):
+            self.assertIn(col, recipe)
+        # ALL columns of the live corpus, not a curated subset.
+        self.assertEqual(len(recipe), len(self.expert_system.df.columns))
+
+    def test_is_safe_true_for_permissive_profile(self):
+        # Any recipe that already surfaced in this profile's own
+        # /recommendations/ results must be is_safe=True on the detail
+        # endpoint for the same profile.
+        reco = self.client.get("/api/recipes/recommendations/")
+        self.assertEqual(reco.status_code, 200)
+        results = reco.json()["results"]
+        self.assertTrue(results)
+        safe_id = results[0]["RecipeId"]
+
+        resp = self.client.get(self._url(safe_id))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["is_safe"])
+
+    def test_is_safe_false_for_allergen_conflict(self):
+        # Find a real recipe flagged HasNuts == True in the live corpus,
+        # then confirm a peanut-allergy profile marks it unsafe.
+        df = self.expert_system.df
+        nut_recipes = df[df["HasNuts"] == True]  # noqa: E712 (real bool column)
+        self.assertGreater(len(nut_recipes), 0,
+                            "expected at least one HasNuts recipe in the real corpus")
+        unsafe_id = int(nut_recipes["RecipeId"].iloc[0])
+
+        self.user.profile.allergies = ["peanuts"]
+        self.user.profile.save()
+        filter_cache.clear_cache()
+
+        resp = self.client.get(self._url(unsafe_id))
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json()["is_safe"])
+
+    # ------------------------------------------------------------------ #
+    # filter_cache integration — same profile signature + default "any"
+    # meal_type must be shared with RecommendationsView
+    # ------------------------------------------------------------------ #
+    def test_detail_shares_cache_with_recommendations(self):
+        real_system = ai_runtime.get_expert_system()
+        with patch.object(real_system, "filter_recipes",
+                           wraps=real_system.filter_recipes) as spy:
+            self.client.get("/api/recipes/recommendations/")
+            self.client.get(self._url(self.real_recipe_id))
+        self.assertEqual(spy.call_count, 1)
+
+
+class AlternativesViewTests(TestCase):
+    """
+    GET /api/recipes/<int:recipe_id>/alternatives/ — basic coverage for
+    Nour's AlternativesView (had no tests before this change), plus the
+    ImageUrl-in-RESULT_COLUMNS addition.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.expert_system = ai_runtime.get_expert_system()
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = _make_user_with_profile("altuser")
+        token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token.key}")
+        filter_cache.clear_cache()
+        self.real_recipe_id = int(self.expert_system.df["RecipeId"].iloc[0])
+
+    def _url(self, recipe_id):
+        return f"/api/recipes/{recipe_id}/alternatives/"
+
+    def test_unauthenticated_is_401(self):
+        client = APIClient()
+        resp = client.get(self._url(self.real_recipe_id))
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_no_profile_is_404(self):
+        user2 = User.objects.create_user(username="altnoprofile", password="pass12345")
+        token2 = Token.objects.create(user=user2)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Token {token2.key}")
+        resp = client.get(self._url(self.real_recipe_id))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_happy_path_returns_up_to_three_alternatives_with_image_url(self):
+        resp = self.client.get(self._url(self.real_recipe_id))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        for key in ("original_recipe_id", "alternatives_count", "results"):
+            self.assertIn(key, data)
+        self.assertEqual(data["original_recipe_id"], self.real_recipe_id)
+        self.assertLessEqual(data["alternatives_count"], 3)
+        self.assertNotIn(self.real_recipe_id,
+                          [r["RecipeId"] for r in data["results"]])
+        self.assertTrue(data["results"])
+        self.assertTrue(all("ImageUrl" in r for r in data["results"]))
