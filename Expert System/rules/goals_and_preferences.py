@@ -1,11 +1,3 @@
-"""
-goals_and_preferences.py — Smart Dietary Advisor v4.0 — FIXED
-==============================================================
-التغييرات:
-    - vegetarian: أضفنا 30+ نوع سمك ولحم مفقود
-    - vegan: أضفنا المفقودين أيضاً
-"""
-
 from typing import Dict, Any
 
 import numpy as np
@@ -95,21 +87,14 @@ GOAL_VECTORS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# ══════════════════════════════════════════════════════════════
-# التفضيلات الغذائية — قائمة ممنوعات شاملة ومصححة
-# ══════════════════════════════════════════════════════════════
-
-# قائمة شاملة لجميع أنواع اللحوم والدواجن
 _ALL_MEATS = [
     # لحوم حمراء
     "beef", "pork", "lamb", "veal", "goat", "bison", "buffalo",
     "venison", "elk", "deer", "boar", "rabbit", "hare",
     "steak", "roast beef", "ground beef", "ground meat",
     "meatball", "meatloaf", "ribs", "chop",
-    # دواجن
     "chicken", "turkey", "duck", "goose", "quail", "pheasant",
     "cornish hen", "game hen",
-    # مشتقات
     "hot dog", "sausage", "pepperoni", "salami", "bologna",
     "deli meat", "cold cuts", "ham",
     "meat broth", "chicken broth", "beef broth", "bone broth",
@@ -117,9 +102,7 @@ _ALL_MEATS = [
     "lard", "tallow", "suet",
 ]
 
-# قائمة شاملة لجميع أنواع الأسماك والمأكولات البحرية
 _ALL_SEAFOOD = [
-    # أسماك
     "fish", "salmon", "tuna", "cod", "tilapia", "halibut",
     "pollock", "flounder", "sole", "bass", "trout", "catfish",
     "snapper", "grouper", "mahi", "mahi-mahi", "swordfish",
@@ -127,12 +110,10 @@ _ALL_SEAFOOD = [
     "walleye", "perch", "carp", "eel", "monkfish", "haddock",
     "whitefish", "rockfish", "lingcod", "yellowtail", "amberjack",
     "barramundi", "branzino", "turbot", "plaice", "dace",
-    # مأكولات بحرية
     "shrimp", "prawn", "crab", "lobster", "clam", "oyster",
     "scallop", "mussel", "squid", "octopus", "cuttlefish",
     "crawfish", "crayfish", "langoustine",
     "seafood", "shellfish",
-    # صلصات ومشتقات
     "fish sauce", "oyster sauce", "worcestershire sauce",
     "anchovy paste", "fish paste", "shrimp paste",
     "fish stock", "clam juice",
@@ -208,9 +189,6 @@ PREFERENCE_BLOCKS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# ══════════════════════════════════════════════════════════════
-# خطط الأكل الصحي حسب BMI
-# ══════════════════════════════════════════════════════════════
 HEALTHY_DIET_STYLES: Dict[str, Dict[str, str]] = {
     "normal_bmi": {
         "name": "Balanced Nutrition Plan",

@@ -8,13 +8,6 @@ from .serializers import RegisterSerializer, LoginSerializer, UserSerializer
 
 
 class RegisterView(generics.CreateAPIView):
-    """
-    POST /api/accounts/register/
-
-    Public endpoint. Creates a user, then immediately issues a token -
-    this saves the client from having to call /login/ right after
-    signing up (same UX as most modern auth APIs).
-    """
 
     queryset = User.objects.all()
     permission_classes = [permissions.AllowAny]
@@ -36,13 +29,6 @@ class RegisterView(generics.CreateAPIView):
 
 
 class LoginView(APIView):
-    """
-    POST /api/accounts/login/
-
-    Public endpoint. Plain APIView (not a generic) because "login" is an
-    action, not a CRUD operation on a resource - it doesn't map cleanly
-    onto Create/List/Retrieve/Update/Destroy.
-    """
 
     permission_classes = [permissions.AllowAny]
 
@@ -62,13 +48,6 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
-    """
-    POST /api/accounts/logout/
-
-    Protected endpoint - requires a valid 'Authorization: Token <key>'
-    header. Deleting the Token row IS the logout: that key stops working
-    for every future request immediately, no separate blacklist needed.
-    """
 
     permission_classes = [permissions.IsAuthenticated]
 

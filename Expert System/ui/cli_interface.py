@@ -1,18 +1,3 @@
-"""
-cli_interface.py — Smart Dietary Advisor v4.0 — FIXED
-======================================================
-التغييرات:
-    1. PCOS يظهر للإناث فقط
-    2. سؤال الحساسية منفصل (نعم/لا أولاً)
-    3. الحساسيات تأتي من ALLERGIES_BY_STAGE وليس DISEASES_BY_STAGE
-    4. تنبيه عند اختيار milk + lactose_intolerance معاً
-    5. مستوى النشاط البدني
-    6. حماية التعارضات المستحيلة طبياً
-    7. حذف التكرار في بناء UserProfile
-    8. إضافة سؤال نوع الوجبة (فطور/غداء/عشاء)
-    9. ملخص غذائي + إحصائيات الوصفات المعروضة
-"""
-
 import html
 import math
 from typing import List, Dict, Optional
@@ -81,7 +66,6 @@ def get_available_goals(profile: UserProfile) -> List[str]:
     return GOALS_BY_CONDITION.get(profile.life_stage, GOALS_BY_CONDITION["adult"])
 
 
-# ══ التعارضات المستحيلة طبياً ════════════════════════════════
 IMPOSSIBLE_COMBOS = [
     (
         {"obesity", "underweight"},
@@ -99,7 +83,6 @@ IMPOSSIBLE_COMBOS = [
 
 
 def _validate_conditions(conditions: List[str], disease_list: List[str]) -> List[str]:
-    """تحقق من التعارضات وأعد الاختيار لو فيه مشكلة."""
     while True:
         cond_set = set(conditions)
         conflict = None
@@ -109,7 +92,7 @@ def _validate_conditions(conditions: List[str], disease_list: List[str]) -> List
                 break
         if not conflict:
             return conditions
-        print(f"\n  ❌  Conflict detected: {conflict}")
+        print(f"\n    Conflict detected: {conflict}")
         print("  Please re-select your conditions.\n")
         conditions = _pick_multi(disease_list, DISEASE_EN, "Medical Conditions")
 
@@ -125,7 +108,6 @@ def build_profile_interactive() -> UserProfile:
     print("    Adult   :  18 - 64  years")
     print("    Elderly :  65+       years")
 
-    # ── العمر ─────────────────────────────────────────────
     while True:
         try:
             age = int(input("\n  Age (years): ").strip())
@@ -140,7 +122,6 @@ def build_profile_interactive() -> UserProfile:
              "elderly" if age >= 65 else "adult")
     print(f"  OK  Age category: {AGE_RANGE_EN[stage]}")
 
-    # ── الجنس ─────────────────────────────────────────────
     _divider("Gender")
     print("  1. Male\n  2. Female")
     gender = "male"
@@ -150,7 +131,6 @@ def build_profile_interactive() -> UserProfile:
         elif r == "2": gender = "female"; break
         print("  Warning: Select 1 or 2.")
 
-    # ── القياسات ──────────────────────────────────────────
     _divider("Measurements")
     while True:
         try:
@@ -169,7 +149,6 @@ def build_profile_interactive() -> UserProfile:
         print("  Note: BMI interpretation for children differs from adults.")
         print("        Please consult a pediatrician for accurate assessment.")
 
-    # ── مستوى النشاط البدني ───────────────────────────────
     activity_level = "light"
     if age >= 13:
         _divider("Physical Activity Level")
@@ -194,14 +173,12 @@ def build_profile_interactive() -> UserProfile:
                 break
             print("  Warning: Select 1-5.")
 
-    # ── الحمل (للإناث فقط) ────────────────────────────────
     pregnant = False
     if gender == "female" and age >= 17:
         _divider("Pregnancy")
         print("  1. Yes -- currently pregnant\n  2. No")
         pregnant = (input("  Select (1 or 2): ").strip() == "1")
 
-    # ── الأمراض ───────────────────────────────────────────
     disease_list = list(DISEASES_BY_STAGE[stage])
     if gender == "female" and stage in DISEASES_FEMALE_ONLY:
         disease_list = disease_list + DISEASES_FEMALE_ONLY[stage]
@@ -209,7 +186,6 @@ def build_profile_interactive() -> UserProfile:
     conditions = _pick_multi(disease_list, DISEASE_EN, "Medical Conditions")
     conditions = _validate_conditions(conditions, disease_list)
 
-    # ── الحساسيات — سؤال منفصل ────────────────────────────
     _divider("Food Allergies")
     print("  Do you have any food allergies?")
     print("  1. Yes -- I have food allergies")
@@ -228,10 +204,8 @@ def build_profile_interactive() -> UserProfile:
     else:
         print("  OK  No allergies recorded.")
 
-    # ── التفضيلات ─────────────────────────────────────────
     preferences = _pick_multi(list(PREFERENCE_EN.keys()), PREFERENCE_EN, "Food Preferences")
 
-    # ── بناء الملف الشخصي ─────────────────────────────────
     profile_tmp = UserProfile(
         age=age, height=height, weight=weight, gender=gender,
         pregnant=pregnant, conditions=conditions,
@@ -239,11 +213,9 @@ def build_profile_interactive() -> UserProfile:
         activity_level=activity_level,
     )
 
-    # ── الهدف الغذائي ─────────────────────────────────────
     goal = _pick_one(get_available_goals(profile_tmp), GOAL_EN, "Nutritional Goal")
     profile_tmp.goal = goal
 
-    # ── نوع الوجبة ────────────────────────────────────────
     _divider("Meal Type")
     print("  1. Breakfast")
     print("  2. Lunch")
@@ -308,7 +280,6 @@ def print_results(result: dict, top_n: int = 15):
     print(f"  Activity Level:   {ps.get('activity_level', 'light')}")
     print(f"  Meal Type:        {result.get('meal_type', 'any')}")
 
-    # ── ملخص غذائي ← جديد ────────────────────────────────
     daily  = ps["daily_calories"]
     meal   = result.get("target_meal_calories", ps["per_meal_kcal"])
     remain = daily - meal
@@ -359,12 +330,6 @@ def print_results(result: dict, top_n: int = 15):
         return int(float(v)) if v is not None and not (isinstance(v, float) and math.isnan(v)) else 0
 
     for i, (_, row) in enumerate(df.head(top_n).iterrows(), 1):
-        # 🛠️ إصلاح: ~4.2% من أسماء الوصفات (16,245 من 384,541) تحتوي
-        # بقايا HTML entities من استخراج البيانات الأصلي (&amp; بدل &،
-        # &quot; بدل "، &eacute; بدل é...) — لا تؤثر على دقة الفلترة
-        # الطبية إطلاقاً، لكنها تظهر بشكل غير احترافي بالنتيجة النهائية
-        # المعروضة للمستخدم (مثلاً "Horse &amp; Buggy" بدل "Horse &
-        # Buggy"). html.unescape() يحوّلها لشكلها الصحيح المقروء.
         raw  = html.unescape(str(row.get(name_col, "Unknown")))
         name = (raw[:46] + "..") if len(raw) > 48 else raw.ljust(48)
         cal  = _v(row, "Calories")
@@ -388,7 +353,6 @@ def print_results(result: dict, top_n: int = 15):
         if i < min(top_n, len(df)):
             print("")
 
-    # ── إحصائيات الوصفات المعروضة ← جديد ─────────────────
     shown_df = df.head(top_n)
     avg_cal  = shown_df["Calories"].mean()       if "Calories"       in shown_df.columns else 0
     avg_prot = shown_df["ProteinContent"].mean() if "ProteinContent" in shown_df.columns else 0

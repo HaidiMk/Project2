@@ -1,5 +1,3 @@
-// Admin/Viewer Dashboard header. No session/login UI here by design —
-// this Dashboard opens directly (see App.jsx).
 export default function Header() {
   return (
     <header className="dashboard-header">

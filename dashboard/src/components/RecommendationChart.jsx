@@ -8,11 +8,6 @@ import {
   CartesianGrid,
 } from "recharts";
 
-/**
- * The one approved chart. Reads the future Dashboard API's `chart_data[]`
- * ({ label, value }[]). Shows a neutral empty state until real data exists —
- * never renders fabricated bars.
- */
 export default function RecommendationChart({ chartData }) {
   if (!chartData || chartData.length === 0) {
     return (

@@ -30,20 +30,11 @@ def _make_user_with_profile(username, **profile_overrides):
 
 
 class SearchViewTests(TestCase):
-    """
-    GET /api/recipes/search/ — covers the contract documented in
-    recipes/views.py: SearchView (param validation, error paths, meal_type
-    precedence, taste_text pass-through, filters_applied, the anti-
-    truncation-bias fix, and NLP-model singleton reuse).
-    """
-
     URL = "/api/recipes/search/"
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        # Pay the Expert System's CSV-load cost once for the whole class,
-        # the same singleton every real request shares.
         ai_runtime.get_expert_system()
 
     def setUp(self):
@@ -56,9 +47,6 @@ class SearchViewTests(TestCase):
     def _get(self, **params):
         return self.client.get(self.URL, params)
 
-    # ------------------------------------------------------------------ #
-    # error paths
-    # ------------------------------------------------------------------ #
     def test_missing_query_is_400(self):
         self.assertEqual(self._get().status_code, 400)
 
@@ -100,9 +88,6 @@ class SearchViewTests(TestCase):
             resp = self._get(query="chicken")
         self.assertEqual(resp.status_code, 500)
 
-    # ------------------------------------------------------------------ #
-    # happy paths / contract shape
-    # ------------------------------------------------------------------ #
     def test_basic_search_returns_expected_shape(self):
         resp = self._get(query="chicken", limit=5)
         self.assertEqual(resp.status_code, 200)
@@ -145,18 +130,12 @@ class SearchViewTests(TestCase):
         self.assertTrue(all("_taste_score" not in r for r in results_no_taste))
 
     def test_nlp_filters_only_narrow_results(self):
-        # NLP query refinement can only narrow the Expert System's safe set,
-        # never widen it (NFR-010) — total_safe for a constrained query must
-        # be <= the unconstrained recommendations total for the same profile.
         reco = self.client.get("/api/recipes/recommendations/")
         search = self._get(query="low sugar breakfast")
         self.assertEqual(reco.status_code, 200)
         self.assertEqual(search.status_code, 200)
         self.assertLessEqual(search.json()["total_safe"], reco.json()["total_safe"])
 
-    # ------------------------------------------------------------------ #
-    # anti-truncation-bias regression (the reason for _NLP_PRERANK_LIMIT)
-    # ------------------------------------------------------------------ #
     def test_full_filtered_set_passed_to_topsis_not_pre_truncated_by_limit(self):
         with patch("recipes.views.rank_with_topsis") as mock_rank:
             mock_rank.side_effect = lambda df, goal, user_taste_text=None: df.assign(
@@ -166,14 +145,9 @@ class SearchViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         passed_df = mock_rank.call_args[0][0]
         total_safe = resp.json()["total_safe"]
-        # rank_with_topsis must see the FULL filtered set (== total_safe),
-        # not just `limit` rows pre-selected by _expert_score.
         self.assertEqual(len(passed_df), total_safe)
         self.assertGreater(len(passed_df), 3)
 
-    # ------------------------------------------------------------------ #
-    # NLP Sentence-BERT singleton reuse
-    # ------------------------------------------------------------------ #
     def test_nlp_model_singleton_reused_across_requests(self):
         import Nlp.query_parser as query_parser
 
@@ -185,9 +159,6 @@ class SearchViewTests(TestCase):
             self.assertEqual(resp.status_code, 200)
             mock_st.assert_not_called()
 
-    # ------------------------------------------------------------------ #
-    # RecommendationsView smoke test — guards the shared json_safe refactor
-    # ------------------------------------------------------------------ #
     def test_recommendations_still_works_after_json_safe_extraction(self):
         resp = self.client.get("/api/recipes/recommendations/")
         self.assertEqual(resp.status_code, 200)
@@ -197,10 +168,6 @@ class SearchViewTests(TestCase):
         self.assertTrue(data["results"])
         self.assertTrue(all("ImageUrl" in r for r in data["results"]))
 
-    # ------------------------------------------------------------------ #
-    # filter_cache integration — repeat requests for the same profile
-    # signature + meal_type must not recompute filter_recipes()
-    # ------------------------------------------------------------------ #
     def test_repeat_search_requests_hit_the_cache(self):
         real_system = ai_runtime.get_expert_system()
         with patch.object(real_system, "filter_recipes",
@@ -209,8 +176,6 @@ class SearchViewTests(TestCase):
             resp2 = self._get(query="beef", meal_type="dinner")
         self.assertEqual(resp1.status_code, 200)
         self.assertEqual(resp2.status_code, 200)
-        # Same profile signature + meal_type -> filter_recipes() computed
-        # once even though the query text differs between requests.
         self.assertEqual(spy.call_count, 1)
 
     def test_cache_shared_between_search_and_recommendations(self):
@@ -223,7 +188,6 @@ class SearchViewTests(TestCase):
 
 
 class NlpWarmupTests(TestCase):
-    """AI_EAGER_NLP_WARMUP flag + warm_up_nlp_search() singleton trigger."""
 
     def test_warm_up_nlp_search_is_idempotent(self):
         previous = ai_runtime._nlp_warmed
@@ -257,8 +221,6 @@ class NlpWarmupTests(TestCase):
 
 
 def _fake_expert_system(compute_result=None):
-    """A minimal duck-typed stand-in for DietaryExpertSystem: only
-    .filter_recipes() is ever called on it by filter_cache."""
     fake = type("FakeExpertSystem", (), {})()
     calls = []
 
@@ -280,8 +242,6 @@ def _ai_profile(**overrides):
 
 
 class FilterCacheTests(TestCase):
-    """Unit tests for recipes/services/filter_cache.py in isolation — no
-    HTTP layer, no real Expert System, so these run instantly."""
 
     def setUp(self):
         filter_cache.clear_cache()
@@ -292,7 +252,7 @@ class FilterCacheTests(TestCase):
     def test_second_call_with_identical_signature_is_a_cache_hit(self):
         fake = _fake_expert_system()
         r1 = filter_cache.get_filtered_recipes(fake, _ai_profile())
-        r2 = filter_cache.get_filtered_recipes(fake, _ai_profile())  # new object, same values
+        r2 = filter_cache.get_filtered_recipes(fake, _ai_profile())  
         self.assertEqual(len(fake.calls), 1)
         self.assertIs(r1, r2)
 
@@ -324,14 +284,14 @@ class FilterCacheTests(TestCase):
 
     def test_caching_expert_system_proxy_delegates_and_caches(self):
         fake = _fake_expert_system()
-        fake.corpus_size = 384541  # arbitrary passthrough attribute
+        fake.corpus_size = 384541 
         proxy = filter_cache._CachingExpertSystem(fake)
 
         proxy.filter_recipes(_ai_profile())
-        proxy.filter_recipes(_ai_profile())  # same signature -> cache hit
+        proxy.filter_recipes(_ai_profile()) 
 
         self.assertEqual(len(fake.calls), 1)
-        self.assertEqual(proxy.corpus_size, 384541)  # __getattr__ fallback
+        self.assertEqual(proxy.corpus_size, 384541) 
 
     def test_get_cached_expert_system_is_a_process_wide_singleton(self):
         a = filter_cache.get_cached_expert_system()
@@ -340,10 +300,6 @@ class FilterCacheTests(TestCase):
 
 
 class PreferenceAliasTests(TestCase):
-    """profile_translator.py's PREFERENCE_ALIASES — the 10 additions from
-    the alias-map investigation, plus a regression check on the pre-existing
-    aliases and the deliberately-unmapped allergen phrases."""
-
     NEW_ALIASES = {
         "low carb":       "low_carb",
         "high protein":   "no_preference",
@@ -398,10 +354,6 @@ class PreferenceAliasTests(TestCase):
 
 
 class RecipeDetailViewTests(TestCase):
-    """
-    GET /api/recipes/<int:recipe_id>/ — full recipe detail + per-user
-    is_safe flag (recipes/views.py: RecipeDetailView).
-    """
 
     @classmethod
     def setUpClass(cls):
@@ -419,9 +371,6 @@ class RecipeDetailViewTests(TestCase):
     def _url(self, recipe_id):
         return f"/api/recipes/{recipe_id}/"
 
-    # ------------------------------------------------------------------ #
-    # error paths
-    # ------------------------------------------------------------------ #
     def test_unauthenticated_is_401(self):
         client = APIClient()
         resp = client.get(self._url(self.real_recipe_id))
@@ -443,7 +392,6 @@ class RecipeDetailViewTests(TestCase):
         self.assertIn("conditions", resp.json()["detail"])
 
     def test_recipe_not_in_corpus_is_404(self):
-        # Guaranteed absent: bigger than any real RecipeId in the live corpus.
         missing_id = int(self.expert_system.df["RecipeId"].max()) + 999_999
         resp = self.client.get(self._url(missing_id))
         self.assertEqual(resp.status_code, 404)
@@ -456,9 +404,6 @@ class RecipeDetailViewTests(TestCase):
             resp = self.client.get(self._url(self.real_recipe_id))
         self.assertEqual(resp.status_code, 500)
 
-    # ------------------------------------------------------------------ #
-    # happy paths / contract shape
-    # ------------------------------------------------------------------ #
     def test_happy_path_returns_all_columns(self):
         resp = self.client.get(self._url(self.real_recipe_id))
         self.assertEqual(resp.status_code, 200)
@@ -470,12 +415,9 @@ class RecipeDetailViewTests(TestCase):
         for col in ("RecipeId", "Name", "ImageUrl", "ImagesCount", "ImagesJson",
                     "Calories", "HealthScore", "MealType"):
             self.assertIn(col, recipe)
-        # ALL columns of the live corpus, not a curated subset.
         self.assertEqual(len(recipe), len(self.expert_system.df.columns))
 
     def test_is_safe_true_for_permissive_profile(self):
-        # Any recipe that already surfaced in this profile's own
-        # /recommendations/ results must be is_safe=True on the detail
         # endpoint for the same profile.
         reco = self.client.get("/api/recipes/recommendations/")
         self.assertEqual(reco.status_code, 200)
@@ -488,10 +430,8 @@ class RecipeDetailViewTests(TestCase):
         self.assertTrue(resp.json()["is_safe"])
 
     def test_is_safe_false_for_allergen_conflict(self):
-        # Find a real recipe flagged HasNuts == True in the live corpus,
-        # then confirm a peanut-allergy profile marks it unsafe.
         df = self.expert_system.df
-        nut_recipes = df[df["HasNuts"] == True]  # noqa: E712 (real bool column)
+        nut_recipes = df[df["HasNuts"] == True]  
         self.assertGreater(len(nut_recipes), 0,
                             "expected at least one HasNuts recipe in the real corpus")
         unsafe_id = int(nut_recipes["RecipeId"].iloc[0])
@@ -504,10 +444,6 @@ class RecipeDetailViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.json()["is_safe"])
 
-    # ------------------------------------------------------------------ #
-    # filter_cache integration — same profile signature + default "any"
-    # meal_type must be shared with RecommendationsView
-    # ------------------------------------------------------------------ #
     def test_detail_shares_cache_with_recommendations(self):
         real_system = ai_runtime.get_expert_system()
         with patch.object(real_system, "filter_recipes",
@@ -518,11 +454,6 @@ class RecipeDetailViewTests(TestCase):
 
 
 class AlternativesViewTests(TestCase):
-    """
-    GET /api/recipes/<int:recipe_id>/alternatives/ — basic coverage for
-    Nour's AlternativesView (had no tests before this change), plus the
-    ImageUrl-in-RESULT_COLUMNS addition.
-    """
 
     @classmethod
     def setUpClass(cls):

@@ -1,33 +1,3 @@
-"""
-query_parser.py — free-text English search query -> structured filter dict.
-
-Method (no NER, no fine-tuning):
-    1. Explicit numeric constraints -> regex (extract_numeric_constraints),
-       completely independent of the semantic step.
-    2. Vague descriptive terms ("low sugar", "high protein", ...) -> fixed
-       reference values in VAGUE_TERMS. Conflict rule: an explicit number
-       always overrides the vague-term default for the same field.
-    3. Entities (condition, meal_type, diet_preference, main_ingredient)
-       -> Sentence-BERT semantic similarity against a fixed vocabulary
-       built from the local vocabulary lists in vocab_terms.py (mirrored
-       from Expert System/core/constants.py — this module has zero import
-       dependency on the rest of the project).
-        "sentence-transformers/all-MiniLM-L6-v2" is used pretrained only.
-        Every category claims a phrase only through its own measured gate
-        (category-specific thresholds, minimum margins, generic-word /
-        misleading-phrase exclusions — see the constants below), so a bare
-        generic word can never turn into an inferred condition, meal,
-        preference or ingredient.
-    4. Allergies -> explicit negation ("no dairy", "nut-free") or marker
-       ("allergic to nuts") phrases only, so positive mentions such as
-       "seafood pasta" never produce a false allergy.
-
-Medical safety (NFR-010):
-    This module ONLY returns filters. It never decides what is medically
-    safe, never filters and never blocks anything — that responsibility
-    belongs entirely to the Expert System downstream.
-"""
-
 from __future__ import annotations
 
 import re
@@ -46,54 +16,18 @@ try:
 except ImportError:  # when run standalone with Nlp/ directly on sys.path
     from vocab_terms import ALLERGY_EN, DISEASE_EN, MEAL_TYPE_EN, PREFERENCE_EN
 
-# --------------------------------------------------------------------------- #
-# Model & matching parameters
-# --------------------------------------------------------------------------- #
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
-# Cosine-similarity thresholds on normalized all-MiniLM-L6-v2 embeddings.
-# Paraphrase-level matches typically land in the 0.55-0.85 band; unrelated
-# pairs sit well below 0.45. Preferences use a stricter bar because short
-# nutrient words ("carb") hover near 0.5 against "low carb".
-#
-# main_ingredient uses an even stricter bar (measured, not guessed):
-# genuine stated-ingredient matches score >= 0.72 (ingredient inside a
-# multi-word phrase, e.g. "chicken lunch" -> 0.72) and >= 0.86 (the exact
-# ingredient word, e.g. "chicken" -> 1.0). Generic single words that merely
-# sound food-adjacent ("salad" -> "cheese" 0.56, "soup" -> "pasta" 0.56,
-# "breakfast" -> "eggs" 0.58, "pizza" -> "cheese" 0.62) top out well below
-# 0.65, so that bar cleanly separates the two populations.
 THRESHOLD_DEFAULT = 0.50
 
-# Raised from 0.62 after measurement: genuine preference phrases score
-# >= 0.72 ("no meat" -> vegetarian 0.72, "loves chicken" -> chicken_lover
-# 0.75), while misleading generic words ("diet" -> mediterranean 0.63,
-# "vegetable" -> vegetarian 0.65) sit below 0.70.
 THRESHOLD_DIET_PREFERENCE = 0.70
 THRESHOLD_MAIN_INGREDIENT = 0.65
 
-# Minimum gap between the best and second-best main_ingredient match of a
-# query phrase. Real ingredient claims always stand out by a wide margin
-# (>= 0.13 even for "rice" vs "brown rice"); weak/ambiguous guesses where
-# nothing stands out (e.g. "meat" -> beef 0.82 vs pork, margin 0.09;
-# "cabbage" -> carrot 0.67 vs broccoli, margin 0.05) are rejected.
 MAIN_INGREDIENT_MIN_MARGIN = 0.10
 
-# Same ambiguity guard for meal_type, with a lower bar: measured misleading
-# words hover at margin ~0.00 ("snack" -> dinner 0.56 vs lunch 0.56,
-# "quick meal" -> dinner 0.61 vs lunch 0.61), while every genuine meal
-# phrase keeps a margin of at least 0.07 ("afternoon" -> lunch 0.55 vs
-# breakfast 0.49).
 MEAL_TYPE_MIN_MARGIN = 0.05
 
-# Tokens that name a dish type, a meal type or a broad food category
-# ("salad", "soup", "dinner", "meat", ...) rather than a specific
-# ingredient. A query phrase made ONLY of such tokens can never claim a
-# main_ingredient: a generic word must not turn into an inferred
-# ingredient. Phrases that ALSO contain a real ingredient word
-# ("chicken salad", "lentil soup", "quinoa salad") pass untouched, because
-# the ingredient token itself is not in this set.
 _GENERIC_FOOD_WORDS = frozenset("""
 salad soup stew dish snack treat dessert appetizer entree side sides
 pizza sandwich sandwiches burger burgers taco tacos wrap wraps quesadilla
@@ -106,50 +40,12 @@ meat poultry seafood vegetable vegetables veggie veggies fruit fruits
 fries chips
 """.split())
 
-# Single words that must never claim a medical condition by themselves.
-# Every entry was measured with all-MiniLM-L6-v2: it clears the 0.50
-# default threshold against some condition label yet does not genuinely
-# state a condition — "blood" -> "anemia" 0.56, "heart" 0.57,
-# "kidney" -> "chronic_kidney_disease" 0.66, "liver" -> "hepatitis" 0.71,
-# "disease" 0.61, "chronic" 0.59, "iron" -> "anemia" 0.56,
-# "overweight" -> "underweight" 0.87, "gluten" 0.74, "dairy" 0.57,
-# "lactose" 0.80, "fat" -> "obesity" 0.70, "cholesterol" 0.87,
-# "bone" -> "osteoporosis" 0.61, "lung" -> "asthma" 0.60,
-# "sugar" -> "diabetes" 0.60, "weight" -> "underweight" 0.70, and
-# "thyroid" -> "hypothyroidism" 0.74 (hyperthyroidism scores ~0.72, so
-# a bare "thyroid" cannot pick the right subtype). Only the bare single
-# token is blocked: the same word inside a longer phrase keeps its
-# genuine claim ("kidney disease" 0.84, "blood sugar" 0.71,
-# "heart disease" 1.00, "iron deficiency" 0.89).
 _GENERIC_CONDITION_WORDS = frozenset("""
 blood heart kidney liver disease chronic iron overweight gluten dairy
 lactose fat cholesterol bone lung sugar weight thyroid
 """.split())
 
-# Multi-word phrases that measure closest to a condition label but do not
-# state that condition (measured): "blood problem" -> "anemia" 0.51,
-# "heart healthy" -> "heart_disease" 0.66, "lose weight" 0.60 /
-# "weight loss" 0.62 / "weight issue" 0.52 / "overweight person" 0.75 /
-# "overweight people" 0.72 -> "obesity"/"underweight", "gluten free"
-# 0.69, "dairy free" 0.53, "sensitive stomach" ->
-# "irritable_bowel_syndrome" 0.54, "chronic disease" ->
-# "chronic_kidney_disease" 0.69. "sugar" is deliberately NOT a stopword
-# so that "blood sugar" -> "diabetes" 0.71 stays claimable; the
-# food-context sugar phrases this opens up are blocked here instead
-# (all -> "diabetes" unless noted): "high sugar" 0.57, "sugar meal"
-# 0.51, "sugar cake" 0.51, "sugar drink" 0.54, "sugar milk" ->
-# "lactose_intolerance" 0.52, "sugar levels" 0.50, "sugar control" 0.57,
-# "sugar intake" 0.53, "reduce sugar" 0.56, "cut sugar" 0.50.
-#
-# Matching rule (see _semantic_match): a phrase is blocked when a
-# misleading phrase occurs inside it ("heart healthy meal" contains
-# "heart healthy"), EXCEPT sugar phrases that are "blood"-qualified:
-# "blood sugar levels" contains "sugar levels" but is a genuine diabetes
-# mention, so a sugar phrase is excused only when the phrase also
-# contains "blood". Genuine diagnostics are never blocked: "blood
-# sugar" 0.71, "blood sugar levels" 0.53, "blood sugar problem" 0.63,
-# "high blood sugar" 0.66, "blood pressure" 0.75, "kidney disease"
-# 0.84, "liver problem" 0.73.
+
 _MISLEADING_CONDITION_PHRASES = frozenset([
     "blood problem", "heart healthy", "lose weight", "weight loss",
     "weight issue", "overweight person", "overweight people",
@@ -159,7 +55,6 @@ _MISLEADING_CONDITION_PHRASES = frozenset([
     "reduce sugar", "cut sugar",
 ])
 
-# Fixed reference values for vague descriptive terms (do not invent others).
 VAGUE_TERMS = {
     "low sugar":    {"sugar_max": 15},
     "low sodium":   {"sodium_max": 600},
@@ -168,8 +63,6 @@ VAGUE_TERMS = {
     "high fiber":   {"fiber_min": 5},
 }
 
-# Regexes used to detect the vague terms (also accept "low in sugar",
-# "low-sugar", "low calories", ...). Kept in sync with VAGUE_TERMS keys.
 _VAGUE_PHRASE_RES: Dict[str, re.Pattern] = {
     "low sugar":    re.compile(r"\blow\s*(?:in\s+)?sugar(?:s)?\b"),
     "low sodium":   re.compile(r"\blow\s*(?:in\s+)?sodium\b"),
@@ -178,8 +71,6 @@ _VAGUE_PHRASE_RES: Dict[str, re.Pattern] = {
     "high fiber":   re.compile(r"\bhigh\s*(?:in\s+)?fiber\b"),
 }
 
-# Tokens filtered out before building n-gram candidates for semantic matching.
-# Nutrient words / units are handled by the numeric & vague steps instead.
 _STOPWORDS = frozenset("""
 a an and are at be by for from in is it my of on or the to with
 i me we you your am is want would like need have has had having please give
@@ -192,18 +83,12 @@ calorie calories kcal cal protein sodium fiber fat
 allergy allergic options option show looking
 """.split())
 
-# Direction qualifiers for explicit numbers ("under 600 mg sodium", ...).
 _MAX_DIRECTION_RE = re.compile(
     r"\b(?:under|below|less than|at most|no more than|max(?:imum)?|"
     r"no higher than|or less|or fewer)\b", re.IGNORECASE)
 _MIN_DIRECTION_RE = re.compile(
     r"\b(?:at least|at a minimum|at minimum|minimum|min\b|more than|over|"
     r"no less than)\b", re.IGNORECASE)
-
-# --------------------------------------------------------------------------- #
-# Vocabulary (fixed, canonical — mirrored from core/constants.py into
-# vocab_terms.py so this package stays fully standalone)
-# --------------------------------------------------------------------------- #
 
 _MAIN_INGREDIENTS: List[str] = [
     "chicken", "chicken breast", "turkey", "beef", "lamb", "pork",
@@ -216,9 +101,6 @@ _MAIN_INGREDIENTS: List[str] = [
     "cheese", "yogurt", "eggplant", "tomato", "cucumber", "carrot", "pumpkin",
 ]
 
-# (category, canonical key, text-to-embed). Condition / allergy / meal /
-# preference entries come from the canonical constants lists so the parser's
-# terminology stays consistent with the rest of the system.
 _VOCAB: List[Tuple[str, str, str]] = []
 for _key, _label in DISEASE_EN.items():
     _VOCAB.append(("condition", _key, _key.replace("_", " ")))
@@ -240,7 +122,6 @@ for _ingredient in _MAIN_INGREDIENTS:
 
 del _key, _label, _ingredient
 
-# Lazy singleton: SentenceTransformer is loaded once on first semantic call.
 _MODEL = None
 _MODEL_FAILED = False
 _VOCAB_EMBEDDINGS: Optional[np.ndarray] = None
@@ -259,7 +140,7 @@ def _load_model():
                 batch_size=64,
                 show_progress_bar=False,
             )
-        except Exception as exc:  # offline or missing dependency
+        except Exception as exc:  
             _MODEL_FAILED = True
             warnings.warn(
                 "Semantic matcher unavailable (%s); only numeric/vague/"
@@ -268,12 +149,6 @@ def _load_model():
     return _MODEL
 
 
-# --------------------------------------------------------------------------- #
-# 1. Explicit numeric extraction (regex, independent of Sentence-BERT)
-# --------------------------------------------------------------------------- #
-
-# schema field per nutrient and its default direction (the output schema
-# only has protein_min / fiber_min as minimums and maxes for the rest).
 _FIELD_DIRECTIONS: Dict[str, Tuple[str, str]] = {
     "protein":  ("protein_min",  "min"),
     "fiber":    ("fiber_min",    "min"),
@@ -320,7 +195,6 @@ _NUMERIC_PATTERNS: Dict[str, List[str]] = {
 
 
 def _match_direction(match: re.Match, text: str) -> str:
-    """Return 'min' / 'max' / 'default' for an explicit-number match."""
     context = text[max(0, match.start() - 30):match.end()]
     if _MAX_DIRECTION_RE.search(context):
         return "max"
@@ -330,14 +204,6 @@ def _match_direction(match: re.Match, text: str) -> str:
 
 
 def extract_numeric_constraints(text: str) -> dict:
-    """
-    Extract explicit numeric constraints ("20 grams protein", "600 mg
-    sodium", "under 500 calories") with regex — no semantic model involved.
-
-    Direction qualifiers that contradict the output schema (e.g. "protein
-    under 30 g" would need protein_max, which the schema has no key for)
-    are skipped so a wrong direction is never encoded.
-    """
     result = {}
     for field, patterns in _NUMERIC_PATTERNS.items():
         schema_key, default_direction = _FIELD_DIRECTIONS[field]
@@ -355,10 +221,6 @@ def extract_numeric_constraints(text: str) -> dict:
     return result
 
 
-# --------------------------------------------------------------------------- #
-# 2. Vague descriptive terms -> fixed thresholds
-# --------------------------------------------------------------------------- #
-
 def _apply_vague_terms(text: str, filters: dict) -> None:
     """Apply VAGUE_TERMS defaults (lowest priority; explicit numbers win)."""
     normalized = re.sub(r"-", " ", text.lower())
@@ -366,10 +228,6 @@ def _apply_vague_terms(text: str, filters: dict) -> None:
         if pattern.search(normalized):
             filters.update(VAGUE_TERMS[phrase])
 
-
-# --------------------------------------------------------------------------- #
-# 3. Allergies — explicit negation / marker phrases only
-# --------------------------------------------------------------------------- #
 
 _NEGATION_PATTERNS: List[re.Pattern] = [
     re.compile(r"\b(?:no|without|avoid(?:ing)?|exclude|excluding)\s+([a-z]+)", re.I),
@@ -380,10 +238,6 @@ _NEGATION_PATTERNS: List[re.Pattern] = [
 _ALLERGY_MARKER_RE = re.compile(
     r"\b(?:allergic to|allergy to|allergy)\s+([a-z]+)", re.I)
 
-# Canonical keys are the ALLERGY_EN keys ("milk", "peanuts", ...).
-# TODO: confirm key name with Expert System owner — the output-schema example
-#       shows "dairy"/"nuts", but core/constants.py canonical names are
-#       "milk"/"peanuts"; we always emit the canonical constants keys.
 _ALLERGY_ALIASES: Dict[str, str] = {
     "milk": "milk", "dairy": "milk", "lactose": "milk", "cheese": "milk",
     "butter": "milk", "cream": "milk",
@@ -399,7 +253,6 @@ _ALLERGY_ALIASES: Dict[str, str] = {
 
 
 def _extract_allergy_heads(text: str) -> List[str]:
-    """Heads of negation / allergy-marker phrases, e.g. "no dairy" -> "dairy"."""
     lowered = text.lower()
     heads = []
     for pattern in _NEGATION_PATTERNS:
@@ -409,7 +262,6 @@ def _extract_allergy_heads(text: str) -> List[str]:
 
 
 def _resolve_allergies(heads: List[str]) -> List[str]:
-    """Map allergy heads to canonical ALLERGY_EN keys (alias -> semantic)."""
     resolved: List[str] = []
     seen = set()
     semantic_heads = []
@@ -430,7 +282,6 @@ def _resolve_allergies(heads: List[str]) -> List[str]:
 
 
 def _extract_suppressed_tokens(text: str) -> set:
-    """Tokens that must not feed generic entity matching ("no dairy" etc.)."""
     heads = []
     for pattern in _NEGATION_PATTERNS:
         heads.extend(pattern.findall(text.lower()))
@@ -438,16 +289,8 @@ def _extract_suppressed_tokens(text: str) -> set:
                          "exclude", "excluding"}
 
 
-# --------------------------------------------------------------------------- #
-# 4. Semantic entity matching (Sentence-BERT, pretrained only)
-# --------------------------------------------------------------------------- #
 
 def _candidate_phrases(text: str, suppressed_tokens: set) -> List[str]:
-    """1-3 word n-grams of the query, minus stopwords / negated / vague parts.
-
-    Returned longest-first; ties are broken by first occurrence in the
-    query so the ordering (and the tie-break it feeds) is deterministic.
-    """
     lowered = re.sub(r"[^a-z0-9\s-]", " ", text.lower())
     tokens = [t for t in lowered.split()
               if t not in _STOPWORDS and not t.isdigit()]
@@ -466,31 +309,6 @@ def _candidate_phrases(text: str, suppressed_tokens: set) -> List[str]:
 
 
 def _semantic_match(phrases, categories: Optional[set] = None) -> dict:
-    """
-    Cosine similarity of each query phrase against the precomputed
-    vocabulary embeddings. The best match above the threshold wins; every
-    category is claimed by its single highest-scoring phrase.
-
-    Every category applies its own claim gate to a phrase (measured
-    rationale in the constants above):
-
-      main_ingredient — THRESHOLD_MAIN_INGREDIENT, the
-                        MAIN_INGREDIENT_MIN_MARGIN gap over the
-                        second-best ingredient, and at least one token
-                        outside _GENERIC_FOOD_WORDS in the phrase.
-      meal_type       — MEAL_TYPE_MIN_MARGIN gap over the second-best
-                        meal (misleading words like "snack" hover at
-                        margin ~0.00 while genuine meals keep >= 0.07).
-      condition       — the phrase must not be a bare
-                        _GENERIC_CONDITION_WORDS single token nor contain
-                        a _MISLEADING_CONDITION_PHRASES multi-word phrase
-                        (blood-qualified sugar phrases like "blood sugar
-                        levels" stay claimable).
-      diet_preference — only the higher THRESHOLD_DIET_PREFERENCE.
-
-    A phrase whose strongest candidate fails its category gate is skipped
-    entirely (it cannot be trusted for any category either).
-    """
     if not phrases:
         return {}
     model = _load_model()
@@ -500,13 +318,12 @@ def _semantic_match(phrases, categories: Optional[set] = None) -> dict:
         list(phrases), normalize_embeddings=True,
         batch_size=64, show_progress_bar=False,
     )
-    scores = _VOCAB_EMBEDDINGS @ embeddings.T  # (V, P)
+    scores = _VOCAB_EMBEDDINGS @ embeddings.T  
     allowed = None
     if categories is not None:
         allowed = {i for i, (cat, _, _) in enumerate(_VOCAB)
                    if cat in categories}
 
-    # Per-phrase category gates (measured rationale above the constants).
     ing_rows = [i for i, (cat, _, _) in enumerate(_VOCAB)
                 if cat == "main_ingredient"]
     meal_rows = [i for i, (cat, _, _) in enumerate(_VOCAB)
@@ -538,7 +355,7 @@ def _semantic_match(phrases, categories: Optional[set] = None) -> dict:
         )
         cond_gate.append(not blocked)
 
-    candidates = []  # (score, category, key, phrase_rank)
+    candidates = []  
     for p in range(len(phrases)):
         order = np.argsort(-scores[:, p])
         for vi in order:
@@ -559,9 +376,6 @@ def _semantic_match(phrases, categories: Optional[set] = None) -> dict:
             break
 
     best = {}
-    # Exact ties (e.g. "shrimp pasta": both words match their own vocab
-    # entry at 1.0) are broken by phrase order, which is deterministic and
-    # follows first occurrence in the query — not by set/hash order.
     for score, category, key, p in sorted(
             candidates, key=lambda t: (-t[0], t[3])):
         if category not in best:
@@ -569,47 +383,32 @@ def _semantic_match(phrases, categories: Optional[set] = None) -> dict:
     return best
 
 
-# --------------------------------------------------------------------------- #
-# Main entry point
-# --------------------------------------------------------------------------- #
 
 def parse_query(text: str) -> dict:
     """
     Converts a free-text English search query into a structured filter dict.
     """
     filters = {
-        "condition":        None,  # e.g. "diabetes", "hypertension"
-        "meal_type":        None,  # "breakfast" / "lunch" / "dinner"
-        "protein_min":      None,  # grams
-        "sugar_max":        None,  # grams
-        "sodium_max":       None,  # mg
-        "fiber_min":        None,  # grams
+        "condition":        None,  
+        "meal_type":        None,  
+        "protein_min":      None,  
+        "sugar_max":        None,  
+        "sodium_max":       None,  
+        "fiber_min":        None,  
         "calories_max":     None,
-        "allergy":          [],    # canonical ALLERGY_EN keys
+        "allergy":          [],    
         "diet_preference":  None,
         "main_ingredient":  None,
     }
     if not text or not text.strip():
         return filters
 
-    # 1) Vague descriptive terms (lowest priority).
     _apply_vague_terms(text, filters)
 
-    # 2) Explicit numbers — conflict rule: explicit always wins over vague.
     filters.update(extract_numeric_constraints(text))
 
-    # 3) Allergies — only from explicit negation / marker phrases.
     allergy_heads = _extract_allergy_heads(text)
     filters["allergy"] = _resolve_allergies(allergy_heads)
-    # TODO: confirm key name with Expert System owner — the output-schema
-    #       example shows "dairy"/"nuts" but core/constants.py canonical
-    #       allergy names are "milk"/"peanuts"; we emit the constants keys.
-
-    # 4) Semantic entity matching (Sentence-BERT) for the rest. The allergy
-    #    category is NOT claimable here — allergies come only from explicit
-    #    negation / marker phrases (step 3), so a positive mention such as
-    #    "egg breakfast" can never produce a false allergy, and the mention
-    #    stays available to claim main_ingredient instead.
     suppressed = _extract_suppressed_tokens(text)
     phrases = _candidate_phrases(text, suppressed)
     matches = _semantic_match(
@@ -619,9 +418,6 @@ def parse_query(text: str) -> dict:
     )
     filters["condition"] = matches.get("condition")
     filters["meal_type"] = matches.get("meal_type")
-    # TODO: confirm key name with Expert System owner — the output-schema
-    #       example mentions "keto", which is NOT in core/constants.py
-    #       PREFERENCE_EN and therefore can never match.
     filters["diet_preference"] = matches.get("diet_preference")
     filters["main_ingredient"] = matches.get("main_ingredient")
     return filters

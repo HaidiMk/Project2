@@ -2,12 +2,14 @@
 
 Technical engineering record for the Smart Dietary Advisor system: a recipe
 recommendation pipeline that filters a large recipe corpus for medical safety,
-ranks it for user goals, and personalizes it with two trained models.
+ranks it for user goals, and personalizes it with two trained models — exposed
+to real clients through a Django REST API.
 
 This document is written for someone unfamiliar with the project (a committee
 member or new teammate). It describes what the system does, why it is built the
 way it is, how both models were trained and evaluated, the bugs found during
-manual testing and how they were fixed, and how to verify the system yourself.
+manual testing and how they were fixed, how the backend API is put together,
+and how to verify the system yourself.
 
 ---
 
@@ -16,7 +18,9 @@ manual testing and how they were fixed, and how to verify the system yourself.
 **What it is.** Smart Dietary Advisor takes a user's profile (age, height,
 weight, gender, medical conditions, allergies, dietary goal) plus an optional
 free-text taste statement ("I love garlic and spicy food, dislike seafood") and
-returns a ranked list of safe, goal-aligned, taste-matched recipes.
+returns a ranked list of safe, goal-aligned, taste-matched recipes. A mobile
+app is the primary end-user client of the backend API described in §9; a
+separate read-only admin dashboard (§10) is planned as a second consumer.
 
 **The pipeline** (four stages, all applied to every candidate recipe):
 
@@ -50,7 +54,9 @@ The final blend is:
 **Data.** Recipes come from the Food.com dataset (Kaggle — *Food.com Recipes
 and Interactions*, `RAW_recipes.csv`, ~672 MB raw). After cleaning the corpus
 contains **384,541 recipes** with 9 normalized nutritional features per recipe
-(`cleaned_recipes.csv`).
+(`cleaned_recipes.csv`), plus recipe images (§9) and a larger, less-cleaned
+435,009-row superset (`cleaned_recipes_full.csv`) kept alongside it but not
+used by the live pipeline.
 
 ---
 
@@ -181,6 +187,12 @@ If no condition keys match the trained set, the mean over all 22 conditions is
 used as a neutral fallback. The score feeds the blend as the `0.4`/`0.35` AI
 component.
 
+A separate SHAP-based explainability layer (`ml/health_classifier/explain.py`)
+computes per-condition, per-feature reasons for a recipe's score on demand
+(`explain_health_score(recipe, condition_keys, top_n)`); it is used by the
+backend's recipe-explanation endpoint (§9) and carries a one-time ~8-second
+warmup cost the first time it runs in a process.
+
 ---
 
 ## 4. Model 2 — word2vec (ingredient embeddings + taste personalization)
@@ -268,7 +280,8 @@ root, next to `Expert System/` and `TOPSIS/`. It wraps a **pretrained
 Sentence-BERT model** (`sentence-transformers/all-MiniLM-L6-v2`, 384-dim
 embeddings) to translate a free-text query such as *"low sugar dinner for
 diabetic"* into structured filters, then hands those filters to the
-**existing, unmodified** `DietaryExpertSystem.filter_recipes()`.
+**existing, unmodified** `DietaryExpertSystem.filter_recipes()`. It is the
+engine behind the backend's `GET /api/recipes/search/` endpoint (§9).
 
 **Architecturally separate from the two trained models.** This module is NOT a
 third trained model and should not be mistaken for one:
@@ -289,10 +302,10 @@ third trained model and should not be mistaken for one:
 own term vocabulary (`Nlp/vocab_terms.py` — disease, allergy, preference, and
 meal-type term lists, kept in sync with `Expert System/core/constants.py`);
 the sentence embeddings are used to resolve free-text fragments to those known
-terms. `Nlp/pipeline.py` exposes `search_recipes(query, profile, system,
-top_n)`, which merges the parsed filters into the caller's base `UserProfile`
-and calls the engine. It never modifies the engine's inputs, rules, or output
-ordering.
+terms. `Nlp/pipeline.py` exposes `search_recipes(query_text, base_profile,
+expert_system, top_n)`, which merges the parsed filters into the caller's base
+`UserProfile` and calls the engine. It never modifies the engine's inputs,
+rules, or output ordering.
 
 **Integration fixes (both entirely inside `Nlp/`).** The module was originally
 written against an older `DietaryExpertSystem` API from before the NCF
@@ -312,7 +325,7 @@ stayed untouched and the module was adapted to it.
 **Files:** `pipeline.py`, `query_parser.py`, `vocab_terms.py` (core),
 `check_nlp.py` (internal consistency diagnostic), and five test files
 (`test_query_parser.py`, `test_pipeline.py`, `test_medical_safety.py`,
-`test_robustness.py`, `test_robustness_all.py`). Test commands are in §11.
+`test_robustness.py`, `test_robustness_all.py`). Test commands are in §13.
 
 ---
 
@@ -525,6 +538,14 @@ computed safe set (the output of
 set by taste similarity to the blocked recipe and returns the top-N as
 suggested alternatives.
 
+> **Not the same thing as the backend's `alternatives/` endpoint.** The
+> live `GET /api/recipes/<id>/alternatives/` endpoint documented in §9 does
+> not currently call this function — it re-ranks the user's safe set by
+> TOPSIS with the requested recipe excluded, a simpler goal-based approach.
+> `suggest_alternatives()` is the taste-similarity-driven module described
+> below; it exists in the codebase, is fully tested standalone, but is not
+> yet wired into that endpoint.
+
 **Medical safety is inherited, not re-implemented.** Candidates are drawn
 ONLY from the caller-supplied safe set — no recipe outside the user's safe
 frame can ever be returned. The module adds no safety logic of its own; it
@@ -576,9 +597,8 @@ candidates at all), and `"alternatives"`: up to `top_n` entries of
 `{RecipeId, Name, score, Calories, ProteinContent}`.
 
 **Standalone and opt-in.** Nothing in the scoring/ranking pipeline imports
-this file; a backend calls `suggest_alternatives()` explicitly as a
-separate endpoint — the same integration pattern as
-`explain_health_score()`.
+this file; a caller invokes `suggest_alternatives()` explicitly as a
+separate step — the same integration pattern as `explain_health_score()`.
 
 **Verification.** `test_alternatives.py` runs three real blocked-recipe
 cases against a peanut-allergic profile's safe set: two well-populated
@@ -606,8 +626,9 @@ global no-repeat.
 (medical safety), and `topsis_model.rank_with_topsis()` (TOPSIS/AI/expert
 ranking). No new model, no training, and no modification to the
 scoring/ranking pipeline; nothing in the pipeline imports it (same opt-in
-integration pattern as `explain_health_score()` and
-`suggest_alternatives()`).
+integration pattern as `explain_health_score()` and `suggest_alternatives()`).
+It is not currently wired to any backend endpoint (§9) — it is available for
+integration but not yet exposed over HTTP.
 
 **Key design decisions** (each validated by the meal-planner feasibility
 investigation that preceded the build):
@@ -680,9 +701,9 @@ investigation that preceded the build):
   `forced_repeat_slots`, `days_target_reached`,
   `avg_target_achievement_pct`, and `avg_actual_calories`.
 
-For the backend: construct the `DietaryExpertSystem` once (loading the
-384k-row dataset takes several seconds) and pass it via `system`; with
-`system=None` the module reloads the dataset on every call.
+Constructing the `DietaryExpertSystem` once (loading the 384k-row dataset
+takes several seconds) and passing it via `system` avoids reloading the
+dataset on every call; with `system=None` the module reloads it each time.
 
 **Verification.** `test_meal_planner.py` exercises both sides of the design:
 the reachable-target profile (45yo diabetic male, weight_loss — TDEE 2386
@@ -701,21 +722,261 @@ breakfast/lunch matrices), so even the exhaustive closest-mode search over
 
 ---
 
-## 9. Repository structure (models)
+## 9. Backend REST API (`Backend/`)
 
-The repository root holds three top-level folders: `Expert System/` (rule
-engine + both trained models + data + the `planner/` meal-plan layer),
-`TOPSIS/` (goal scoring + the
-`sanity_check.py` regression suite), and `Nlp/` (smart search, §5). Inside
-`Expert System/`, `ml/` was split into two clearly-named model folders (the
-model code was previously mixed together in one flat folder), and
-`planner/` (§8) was added later as a standalone composition layer that
-builds on the unchanged pipeline rather than modifying it:
+**What it is.** A Django 6 + Django REST Framework project that exposes the
+pipeline in §1–§8 over HTTP for real clients (primarily the mobile app).
+It does not reimplement any AI/ML logic — every recommendation, search,
+score, and explanation is computed by calling straight into `Expert System/`,
+`TOPSIS/`, and `Nlp/` functions. There is no separate "API interface" module
+inside the AI projects: the backend imports and calls
+`DietaryExpertSystem.filter_recipes()`, `topsis_model.rank_with_topsis()`,
+`Nlp.pipeline.search_recipes()`, and
+`ml.health_classifier.explain.explain_health_score()` directly.
+
+### 9.1 How the two codebases connect
+
+`Backend/config/ai_bridge.py` is imported once, at the top of `settings.py`,
+and extends `sys.path` with three folders relative to the repository root:
+the repo root itself (for `import Nlp`), `Expert System/` (for `core`,
+`rules`, `engine`, `ml`), and `TOPSIS/` (for `topsis_model`). This lets
+ordinary Django view code write `from engine.filtering_engine import ...`
+or `from topsis_model import rank_with_topsis` as if those packages were
+part of the Django project, without moving or duplicating any AI project
+file.
+
+`Backend/recipes/services/` holds four small modules that bridge Django and
+the AI layer:
+
+- **`ai_runtime.py`** — process-wide, thread-safe lazy singletons for the
+  expensive AI resources: `get_expert_system()` builds a `DietaryExpertSystem`
+  from the 384,541-row CSV on its first call (several seconds) and returns
+  the cached instance afterward; `warm_up_explainer()` and
+  `warm_up_nlp_search()` do the same for the SHAP explainer (~8 s numba JIT)
+  and the Sentence-BERT search model. Three opt-in environment flags
+  (`AI_EAGER_WARMUP`, `AI_EAGER_EXPLAIN_WARMUP`, `AI_EAGER_NLP_WARMUP`) move
+  each warmup to server startup, in a background thread, instead of paying
+  the cost on the first real request.
+- **`filter_cache.py`** — a thread-safe, bounded (32-entry) LRU cache in
+  front of `filter_recipes()`. That call runs two row-wise pandas
+  computations over the full corpus inside `Expert System/engine/scorer.py`
+  and costs roughly ten to fifty seconds depending on profile complexity;
+  its result depends only on the user's profile fields plus the per-request
+  `meal_type`, never on free-text search terms, so it is safe to cache and
+  reuse across repeat requests with the same signature. A duck-typed proxy
+  (`_CachingExpertSystem`) exposes the identical `.filter_recipes(profile)`
+  interface so it can be handed to `Nlp.pipeline.search_recipes()` as its
+  `expert_system` argument transparently — search benefits from the same
+  cache with no changes to `Nlp/`. `get_cached_expert_system()` is the
+  process-wide entry point every view uses in place of calling
+  `ai_runtime.get_expert_system()` directly.
+- **`profile_translator.py`** — converts a stored Django `UserProfile` into
+  the AI project's `core.user_profile.UserProfile` dataclass. The two sides
+  use different vocabularies for goals (Django's four choices map onto the
+  AI engine's eight, with two eager medical overrides — pregnancy always
+  becomes `pregnancy_diet`, and age 65+ with a general weight goal becomes
+  `elderly_diet`) and for conditions/allergies/preferences (free-form JSON
+  lists on the Django side). The AI engine silently drops any condition or
+  preference string it does not recognize, so this layer normalizes common
+  near-miss aliases (e.g. `"diabetic"` → `diabetes`, `"keto"` → `low_carb`,
+  `"pescatarian"` → `seafood_lover`) and then raises a `ProfileTranslationError`
+  naming the offending field and value for anything still unrecognized,
+  rather than letting it fail silently inside the engine. `meal_type` (which
+  meal, right now) is deliberately left untouched by this layer — it is a
+  per-request query parameter, not a stored profile attribute.
+- **`serialization.py`** — a single `json_safe(value)` helper that converts
+  numpy/pandas scalar types to native Python types and any NaN/`pd.NA` to
+  `None`, so every endpoint's JSON response is always valid regardless of
+  which columns happen to be missing for a given recipe.
+
+### 9.2 Django apps
+
+Three apps are installed beyond Django's own defaults and DRF/CORS:
+`accounts`, `profiles`, `recipes`. Authentication is DRF's built-in
+`TokenAuthentication` (`IsAuthenticated` is the default permission class
+project-wide, applied explicitly on every view below). Recipe data itself
+has no Django ORM model at all — the entire recipe corpus lives in the
+in-memory DataFrame built by the AI layer, not the SQL database; only user
+accounts and health profiles are stored in Django's SQLite database.
+
+**`accounts`** — registration and token issuance:
+
+| Endpoint | Method | Auth | Notes |
+|---|---|---|---|
+| `/api/accounts/register/` | POST | public | Creates a `User`, issues a token immediately so the client doesn't need a separate login call right after signup. |
+| `/api/accounts/login/` | POST | public | Accepts a username or an email address plus password; resolves email to the matching username before calling Django's `authenticate()`. |
+| `/api/accounts/logout/` | POST | token required | Deletes the caller's token row — that key stops working immediately, with no separate blacklist needed. |
+
+**`profiles`** — one health/dietary profile per user, all on a single
+endpoint (`/api/profiles/me/`, always the caller's own profile — there is no
+`<id>` in the URL, and so no way to look up another user's profile by
+guessing an id):
+
+| Method | Behavior |
+|---|---|
+| GET | Retrieve the caller's profile (404 if not created yet). |
+| POST | Create it — 400 if one already exists (use PUT/PATCH to update). |
+| PUT | Replace it entirely. |
+| PATCH | Partially update it. |
+
+Stored fields: `age` (1–120), `height` (cm, 50–250), `weight` (kg, 20–400),
+`gender` (male/female), `pregnant` (bool — only valid when `gender=female`),
+`conditions`/`allergies`/`preferences` (each a free-form JSON list of
+strings), `taste_text`, `goal` (lose_weight / maintain_weight / gain_weight
+/ gain_muscle), `activity_level` (sedentary / light / moderate / active /
+very_active), `meal_type` (standard / vegetarian / vegan / keto / halal /
+other — a stored diet-preference choice, distinct from the per-request
+breakfast/lunch/dinner concept used by the recipe endpoints below).
+
+**`recipes`** — the AI-backed endpoints. All five require
+`IsAuthenticated` and a completed profile (404 if the caller has none);
+all translate the stored profile via `profile_translator` first (400 with
+the translator's exact message on any unrecognized stored value); all
+convert unexpected AI-layer exceptions into a logged, generic 500 rather
+than leaking a stack trace to the client.
+
+- **`GET /api/recipes/recommendations/`** — the base recommendation feed.
+  Query params: `meal_type` (breakfast/lunch/dinner/any, default `any`),
+  `taste_text` (optional free text for Model 2), `limit` (default 20,
+  capped at 100). Runs the profile through `filter_recipes()` (via the
+  cache) then `rank_with_topsis()`. Response: `count`, `total_safe`
+  (recipes surviving Expert System filtering), `total_original` (full
+  corpus size), `meal_type` (the value actually applied), and `results` —
+  each row carrying `RecipeId`, `Name`, `ImageUrl`, `Calories`,
+  `ProteinContent`, `CarbohydrateContent`, `SugarContent`, `FiberContent`,
+  `final_score`, and the four component scores (`_topsis_score`,
+  `_ai_health_score`, `_expert_score`, and `_taste_score` when
+  `taste_text` was given).
+
+- **`GET /api/recipes/search/`** — free-text search. Query params: `query`
+  (required), `meal_type` (optional — wins over whatever the query text
+  itself implies, except in the rare case the parsed text also implies a
+  conflicting meal type, in which case the parsed value wins and the
+  discrepancy is visible by comparing the response's top-level `meal_type`
+  against `filters_applied.meal_type`), `taste_text`, `limit`. Calls
+  `Nlp.pipeline.search_recipes()` with a deliberately large internal
+  pre-rank limit so the full NLP-filtered safe set — not just its own
+  internal top slice — is what TOPSIS re-ranks; truncating before TOPSIS
+  would silently drop recipes the final ranking should have surfaced.
+  Response shape matches `recommendations/` plus `total_safe` narrowed by
+  the query's own numeric/ingredient filters, and a `filters_applied` object
+  exposing the raw parsed filters (condition, meal_type, protein_min,
+  sugar_max, sodium_max, fiber_min, calories_max, allergy, diet_preference,
+  main_ingredient) for transparency.
+
+- **`GET /api/recipes/<id>/alternatives/`** — up to three alternative
+  recipes for a given `RecipeId`. Takes the caller's safe set (via
+  `filter_recipes()`), excludes the given id, and ranks the rest with
+  `rank_with_topsis()` on the caller's goal (no taste text). Response:
+  `original_recipe_id`, `alternatives_count`, `results` (same per-row shape
+  as the other list endpoints, without the component-score breakdown).
+
+- **`GET /api/recipes/<id>/explanation/`** — plain-language reasons for a
+  recipe's medical suitability. Looks the recipe up directly in the cached
+  expert system's DataFrame (404 if not found), and if the caller's profile
+  has no stored medical conditions, returns a simple "no chronic conditions,
+  this recipe is fine" message without invoking the classifier. Otherwise
+  calls `explain_health_score()` for the caller's condition keys and
+  flattens its per-condition SHAP reasons into a single `reasons` list.
+  Response: `recipe_id`, `is_safe` (always `true` — the endpoint currently
+  only explains recipes the caller can already see, never evaluates recipes
+  the Expert System would reject), `reasons`.
+
+- **`GET /api/recipes/<id>/`** — full recipe detail. Looks the recipe up by
+  `RecipeId` directly in the cached expert system's DataFrame (404 if the
+  id isn't present in the live corpus, whether it never existed there or
+  was dropped during data cleaning), and separately runs the caller's
+  profile through `filter_recipes()` to report whether this specific recipe
+  is currently safe for this specific user. Response: `recipe_id`,
+  `is_safe`, and `recipe` — every column the live corpus carries for that
+  row (all 41 columns of `cleaned_recipes.csv`, native JSON types, missing
+  values as `null`), not a curated subset.
+
+### 9.3 Recipe images
+
+`cleaned_recipes.csv` already carries three image-related columns for every
+recipe, populated during data cleaning from the raw dataset's R-style
+`c("url1", "url2", ...)` image-list format: `ImageUrl` (a single
+representative URL, or absent when a recipe has no photos), `ImagesCount`
+(how many photos exist), and `ImagesJson` (the full list, as a JSON array
+string). `ImageUrl` is included in every list endpoint's result rows
+(`recommendations/`, `search/`, `alternatives/`) for card thumbnails, and
+the full trio is naturally present in the detail endpoint's response since
+it returns every column. No second dataset or additional load is needed for
+this — the columns were already part of the DataFrame the expert system
+loads at startup. A separate, larger `cleaned_recipes_full.csv` also exists
+on disk (435,009 rows, including some rows dropped from the live corpus
+during cleaning, plus a handful of columns not carried into the live file);
+the live pipeline does not load it, and the recipe-detail endpoint does not
+need to, since every field it currently exposes is already in
+`cleaned_recipes.csv`.
+
+### 9.4 Testing
+
+The `recipes` app has an automated Django test suite (`python manage.py test
+recipes`) covering every endpoint's error paths (401/403, 404, 400, 500),
+happy-path response shape, the meal_type precedence rules, the NLP
+anti-truncation-bias fix (asserting the full filtered set — not just the
+requested `limit` — reaches TOPSIS), the filter-recipes cache's hit/miss/
+eviction/proxy behavior in isolation, the preference-alias translation
+table, and per-user safety checks on the detail endpoint verified against
+real corpus data (e.g. confirming a peanut-allergy profile marks a recipe
+actually flagged `HasNuts=True` as unsafe). Because most of these tests
+exercise the real AI pipeline end-to-end rather than mocking it, the full
+suite takes several minutes to run — most of that time is the ~10–50 second
+`filter_recipes()` cost, paid once per distinct test profile. The
+`accounts` and `profiles` apps currently have no test coverage beyond
+Django's default project scaffolding.
+
+---
+
+## 10. Dashboard (`dashboard/`)
+
+**What it is.** A standalone, read-only React admin/viewer dashboard (Vite +
+Recharts) living outside `Backend/`, `Expert System/`, `TOPSIS/`, and `Nlp/`.
+It is a separate consumer of a Django REST API, in the same spirit as the
+mobile app, but scoped only to an administrator/viewer role: aggregate
+statistics, a results table, and a chart — no personal recommendations, no
+profile fields, no login flow shared with the end-user mobile app, and no
+recipe or user management.
+
+**Current status: front end built, backend not yet implemented.** The
+dedicated Django "Dashboard API" this project is designed against does not
+exist yet among the endpoints in §9. Until it does, the dashboard is
+intentionally built to run and be previewed against no backend at all: stat
+cards show a neutral placeholder, the results table reads "No results
+available yet," the chart reads "Chart data will appear when Dashboard API
+data is available," and a single banner states the API is pending. No
+placeholder or sample numbers are hard-coded anywhere in the project.
+
+**Provisional contract.** The dashboard's own documentation records a
+proposed (not yet implemented, not yet agreed) response shape it expects to
+consume once a Dashboard API exists — aggregate stats (`total_recipes`,
+`supported_conditions`, `supported_allergies`, `recommendations_count`), a
+`results` list of scored recipe rows, and a `chart_data` list of
+label/value pairs. Every field name is expected to be finalized when the
+Dashboard API is actually implemented; the frontend centralizes all of the
+API base URL and endpoint path configuration in one file
+(`src/config/api.js`, base URL from a `.env` value) and one data-fetching
+function (`src/services/api.js`), so updating the real contract later is a
+small, localized change.
+
+---
+
+## 11. Repository structure
+
+The repository root holds `Expert System/` (rule engine + both trained
+models + data + the `planner/` meal-plan layer), `TOPSIS/` (goal scoring +
+the `sanity_check.py` regression suite), `Nlp/` (smart search, §5),
+`Backend/` (the Django REST API, §9), and `dashboard/` (the standalone
+admin frontend, §10):
 
 ```
 Smart-Dietary-Advisor/                    # repo root
 ├── Expert System/                        # rule engine + both trained models
-│   ├── data/                             # model artifacts (committed, except large ones)
+│   ├── data/                             # model artifacts + recipe corpus
+│   │   ├── cleaned_recipes.csv           # 384,541-row corpus the live pipeline loads
+│   │   ├── cleaned_recipes_full.csv      # 435,009-row superset, not loaded by the live pipeline
 │   │   ├── health_classifier.pt          # Model 1 weights
 │   │   ├── health_scaler.pkl             # Model 1 input standardizer
 │   │   ├── health_classifier_labels.json # 22 condition keys (output order)
@@ -725,35 +986,45 @@ Smart-Dietary-Advisor/                    # repo root
 │   ├── ml/
 │   │   ├── setup_artifacts.md            # artifact inventory + regeneration guide (both models)
 │   │   ├── data/labeled_recipes.csv      # Model 1 training labels (~55 MB, gitignored)
-│   │   ├── health_classifier/            # ⭐ Model 1 — multi-label neural classifier
+│   │   ├── health_classifier/            # Model 1 — multi-label neural classifier
 │   │   │   ├── build_labels.py           #   soft-label generation (rule × rating)
 │   │   │   ├── health_classifier.py      #   model definition + training + 70/15/15 split
 │   │   │   ├── inference.py              #   ai_health_score (production singleton)
+│   │   │   ├── explain.py                #   explain_health_score — SHAP per-condition reasons
 │   │   │   ├── tune_thresholds.py        #   per-condition threshold calibration (val only)
 │   │   │   ├── evaluate_classifier.py    #   test-set reports (flat 0.5 / --tuned)
-│   │   │   ├── results/                  #   metrics.md / metrics_tuned.md (+ json)
-│   │   │   └── MODEL_DOCUMENTATION.md    #   detailed Arabic model documentation
-│   │   └── word2vec/                     # ⭐ Model 2 — ingredient embeddings + taste
+│   │   │   └── results/                  #   metrics.md / metrics_tuned.md (+ json)
+│   │   └── word2vec/                     # Model 2 — ingredient embeddings + taste
 │   │       ├── build_taste_embeddings.py #   corpus cleaning + Word2Vec training
 │   │       ├── taste_concepts.py         #   concept map (43 concepts, vocab-verified)
 │   │       ├── taste_inference.py        #   user text → vector → recipe taste scores
 │   │       └── alternatives.py           #   suggest_alternatives() — taste-similar safe alternatives (opt-in)
-│   ├── planner/                          # ⭐ meal-plan builder — standalone, opt-in (§8)
-│   │   ├── meal_planner.py               #   build_daily_plan / build_weekly_plan
-│   │   └── __init__.py                   #   package marker
-│   └── engine/, rules/, ui/, core/       # expert system (unchanged)
+│   ├── planner/                          # meal-plan builder — standalone, opt-in (§8)
+│   │   └── meal_planner.py               #   build_daily_plan / build_weekly_plan
+│   ├── core/                             # UserProfile dataclass, shared constants
+│   ├── rules/                            # medical rules, allergy/halal rules, goal & preference vectors
+│   ├── engine/                           # filtering_engine.py, scorer.py, rule_builder.py
+│   └── ui/                               # command-line demo interface
 ├── TOPSIS/                               # goal scoring + sanity_check.py suite
-└── Nlp/                                  # ⭐ smart search — UX feature, NOT a trained model (§5)
-    ├── pipeline.py                       #   search_recipes(): query → filters → engine
-    ├── query_parser.py                   #   free-text → structured filters (embeddings)
-    ├── vocab_terms.py                    #   term lists (synced with core/constants.py)
-    ├── check_nlp.py                      #   internal consistency diagnostic
-    └── test_*.py                         #   five test files (see §11)
+├── Nlp/                                  # smart search — UX feature, NOT a trained model (§5)
+│   ├── pipeline.py                       #   search_recipes(): query → filters → engine
+│   ├── query_parser.py                   #   free-text → structured filters (embeddings)
+│   ├── vocab_terms.py                    #   term lists (synced with core/constants.py)
+│   ├── check_nlp.py                      #   internal consistency diagnostic
+│   └── test_*.py                         #   five test files (see §13)
+├── Backend/                               # Django REST API (§9)
+│   ├── config/                           # settings, urls, ai_bridge.py sys.path shim
+│   ├── accounts/                         # register / login / logout
+│   ├── profiles/                         # stored health/dietary profile (one per user)
+│   └── recipes/                          # AI-backed endpoints
+│       └── services/                     # ai_runtime, filter_cache, profile_translator, serialization
+└── dashboard/                            # standalone React admin dashboard (§10)
+    └── src/                              # components, hooks, config, services
 ```
 
 ---
 
-## 10. Known current limitations
+## 12. Known current limitations
 
 Honest account of what the system does not do yet:
 
@@ -789,9 +1060,8 @@ Honest account of what the system does not do yet:
   −0.92, Carbohydrates −0.57, Sugar −0.32; protein slightly favorable at +0.19
   once confounders are controlled), so real rankings are unaffected and the hard
   Expert System rules remain the actual safety gate. The SHAP explanation layer
-  (`Expert System/ml/health_classifier/explain.py`) therefore uses deliberately
-  neutral wording for ProteinContent and Calories instead of asserting medical
-  harm.
+  therefore uses deliberately neutral wording for ProteinContent and Calories
+  instead of asserting medical harm.
 - **Ranking is corpus-bound.** Recommendations are limited to the 384,541
   recipes in the cleaned Food.com corpus; the vocabulary (4,504 tokens) is
   fixed at training time.
@@ -815,27 +1085,47 @@ Honest account of what the system does not do yet:
   assertion. It is a NAME-ONLY case, not a real leak, and is documented as
   known behavior rather than "fixed" by over-broad pattern changes.
 - **`suggest_alternatives()` quality depends on the blocked recipe's
-  ingredient detail.** The taste-similarity path needs a recipe embedding
-  and at least `min_vocab_tokens` (default 4) in-vocab ingredient tokens;
-  sparse or out-of-vocabulary recipes automatically fall back to
-  nutrition-only similarity — the same 9 columns health_classifier uses,
-  useful but lower-fidelity (it matches "similar nutrition", not "similar
-  taste"), and the `"method"` field reports which path fired. The module
-  can also only ever return recipes from the caller's safe set: a small
-  safe set yields few options, and an empty one yields no alternatives
-  (with a clear reason, never an error).
+  ingredient detail**, and it is not yet wired into the live
+  `alternatives/` endpoint (§9, §7) — that endpoint currently uses a
+  simpler TOPSIS-based re-rank of the safe set instead.
 - **`meal_planner` cannot reach the calculated daily target for
-  medically-constrained profiles.** Where per-recipe calorie caps (e.g.
-  diabetes) create a hard ceiling below the day target, no 3-meal
-  combination can hit it — the planner returns the closest achievable day
-  with `"target_reached": false` and a warning that names the binding rule
-  and the shortfall (see §8, design decision 3). This is a known, expected,
-  and honestly-reported behavior — the alternative would be ignoring the
-  medical caps — not a bug.
+  medically-constrained profiles**, and it is not yet exposed over any
+  backend endpoint (§8, §9) — where per-recipe calorie caps (e.g. diabetes)
+  create a hard ceiling below the day target, no 3-meal combination can hit
+  it, and the planner returns the closest achievable day with
+  `"target_reached": false` and a warning naming the binding rule and the
+  shortfall. This is known, expected, and honestly reported — the
+  alternative would be ignoring the medical caps — not a bug.
+- **The backend's filter-recipes cache mitigates repeat cost, not first-call
+  cost.** Every new, distinct profile signature (age/height/weight/gender/
+  pregnant/conditions/allergies/preferences/goal/activity_level/meal_type)
+  still pays the full ~10–50 second row-wise scoring cost in
+  `Expert System/engine/scorer.py` on its first request; only repeat requests
+  with the same signature are fast. The cache is bounded to 32 entries to
+  keep memory use predictable, so a high-traffic deployment with many
+  distinct profiles would still see frequent cold-cache latency.
+- **The Django project is configured for local development, not
+  production.** `DEBUG=True`, `ALLOWED_HOSTS=['*']`, `CORS_ALLOW_ALL_ORIGINS
+  =True`, a hardcoded `SECRET_KEY`, and SQLite as the database are all
+  appropriate for local/mobile-testing use but would need to be tightened
+  and replaced before any real deployment.
+- **Only the `recipes` app has automated test coverage.** `accounts` and
+  `profiles` currently rely on manual verification; their test files are
+  still the default empty Django scaffolding.
+- **The recipe-explanation endpoint's `is_safe` field is not a real safety
+  check.** `GET /api/recipes/<id>/explanation/` always returns `is_safe:
+  true` — it explains suitability for recipes the caller can already see,
+  it does not independently verify the recipe against the Expert System's
+  rules for that user. The recipe-detail endpoint's `is_safe` field (§9),
+  by contrast, is a genuine per-user safety check against `filter_recipes()`.
+- **The admin dashboard has no backend yet.** `dashboard/` is a complete,
+  previewable frontend with no real data to show until a dedicated Django
+  Dashboard API (distinct from the `recipes` endpoints in §9, which are
+  scoped to a single authenticated end user) is implemented (§10).
 
 ---
 
-## 11. How to verify this yourself
+## 13. How to verify this yourself
 
 **End-to-end regression suite** — run from the `TOPSIS/` folder
 (~15–20 minutes; requires the data artifacts):
@@ -876,7 +1166,7 @@ python Nlp/test_medical_safety.py    # 4 medical-safety scenarios — 3/4 PASS
 
 Note on `test_medical_safety.py`: Scenario 2 ("peanut-allergic user asks for a
 peanut dish") still reports 1 NAME-ONLY recipe — "Peanutty Oatmeal Cookies",
-ingredients verified clean (see §10). All other scenarios pass, and the
+ingredients verified clean (see §12). All other scenarios pass, and the
 medical-safety guarantees hold through the real `DietaryExpertSystem`.
 
 **Standalone module smoke tests** — run from the repository root (both load
@@ -895,6 +1185,22 @@ the 2-ingredient blocked recipe (RecipeId 218) is expected to come back
 profile's daily plan is expected to show `"target_reached": false` with an
 honest `"warning"` — the documented degradation behavior, not a bug (see
 §8).
+
+**Backend API tests** — run from the `Backend/` folder (requires the same
+data artifacts as above; most tests exercise the real pipeline end-to-end
+rather than mocking it, so the full run takes several minutes):
+
+```powershell
+cd Backend
+python manage.py test recipes
+```
+
+This covers every `recipes` endpoint's error paths, happy-path response
+shapes, the meal_type precedence rules, the search endpoint's
+anti-truncation-bias fix, the filter-recipes cache's behavior in isolation,
+the preference-alias translation table, and per-user safety checks verified
+against real corpus data (§9.4). `accounts` and `profiles` have no test
+suite to run beyond Django's default scaffolding.
 
 **Artifact regeneration** — see `Expert System/ml/setup_artifacts.md` for the
 full inventory (what is committed vs regenerated locally) and the exact

@@ -4,11 +4,7 @@ from django.db import models
  
  
 class UserProfile(models.Model):
-    """
-    One health/dietary profile per user - everything the recommendation
-    engine needs to personalize meal plans lives here.
-    """
- 
+
     class Gender(models.TextChoices):
         MALE = "male", "Male"
         FEMALE = "female", "Female"
@@ -34,8 +30,6 @@ class UserProfile(models.Model):
         HALAL = "halal", "Halal"
         OTHER = "other", "Other"
  
-    # settings.AUTH_USER_MODEL (not User directly) so this still works if
-    # you ever swap in a custom user model later.
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -54,7 +48,6 @@ class UserProfile(models.Model):
     gender = models.CharField(max_length=10, choices=Gender.choices)
     pregnant = models.BooleanField(default=False)
  
-    # Each stored as a JSON list of strings, e.g. ["diabetes", "hypertension"]
     conditions = models.JSONField(default=list, blank=True)
     allergies = models.JSONField(default=list, blank=True)
     preferences = models.JSONField(default=list, blank=True)

@@ -4,16 +4,6 @@ function fmt(value) {
   return value;
 }
 
-/**
- * Main UC-11 results section — read-only table of the future Dashboard
- * API's `results[]`. Field names follow the provisional contract documented
- * in src/services/api.js (name, final_score, calories, protein,
- * ai_health_score, expert_score). Update alongside that file if the
- * backend team's final contract differs.
- *
- * Renders "No results available yet." until real data exists — never
- * fabricates rows.
- */
 export default function RecommendationsTable({ results }) {
   if (!results || results.length === 0) {
     return <p className="muted">No results available yet.</p>;

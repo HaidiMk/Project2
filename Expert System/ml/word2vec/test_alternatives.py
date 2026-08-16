@@ -14,7 +14,6 @@ print("Loading database...")
 df = load_data()
 system = DietaryExpertSystem(df)
 
-# Create a profile for a user with a peanut allergy
 profile = UserProfile(
     age=30,
     height=165,
@@ -52,10 +51,7 @@ def try_alternative(recipe_id):
     print()
 
 
-# Test a recipe containing peanuts
-try_alternative(508281)   # Creamy Peanut Dessert
+try_alternative(508281)  
 
-# Test another peanut-containing recipe
-try_alternative(220974)   # Super Easy Peanut Noodles
-# الحالة الصعبة — وصفة فقيرة بالمكونات (مكوّنين بس)
+try_alternative(220974)  
 try_alternative(218)

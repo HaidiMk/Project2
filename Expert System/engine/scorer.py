@@ -18,7 +18,6 @@ _ISO_DURATION = re.compile(r"PT(?:(\d+)H)?(?:(\d+)M)?")
 
 
 def _is_missing(val) -> bool:
-    """يعادل: val is None or (isinstance(val, float) and math.isnan(val))."""
     return val is None or (isinstance(val, float) and math.isnan(val))
 
 
@@ -79,18 +78,10 @@ _TIME_EXPLAIN_TIER = [
 
 
 def _tier_value(value: float, table: List[tuple]) -> Optional[float]:
-    """
-    يبحث بجدول (حد_أعلى, قيمة) عن أول صف يكون value أصغر أو يساويه،
-    ويرجع قيمته — بدون أي if/elif، فقط next() على generator.
-    """
     return next(v for limit, v in table if value <= limit)
 
 
 def _calorie_score(cal_value, target: float) -> float:
-    """
-    نسخة دقيقة من المنطق الأصلي للسعرات:
-        diff<=100→+1.5 | <=200→+0.8 | <=300→+0.2 | >400→عقوبة متناسبة | غير ذلك→0
-    """
     diff = abs(float(cal_value) - target) if not _is_missing(cal_value) else None
     tiered = _tier_value(diff, _CALORIE_DIFF_BONUS) if diff is not None else None
     penalty = -(diff - 400) * 0.01 if diff is not None else 0.0
@@ -158,7 +149,6 @@ def _health_score(row: "pd.Series") -> float:
 def _preferred_ingredients_score(
     row: "pd.Series", preferred: Optional[List[str]], ing_col: Optional[str]
 ) -> float:
-    """يعادل: matches = sum(1 for p in preferred if p in text); score += matches*0.5."""
     raw = row.get(ing_col) if (preferred and ing_col) else None
     text = (" ".join(raw) if isinstance(raw, list) else str(raw)).lower() if raw is not None else ""
     matches = sum(1 for p in (preferred or []) if p.lower() in text)
@@ -233,10 +223,6 @@ def score_recipe(
 
 
 def _explain_rules(row: "pd.Series", target: float) -> List[Optional[str]]:
-    """
-    كل قاعدة شرح = (شرط منطقي بدون فرع تنفيذي, نص الرسالة).
-    القيمة الناتجة None تعني "لا تنطبق" وتُفلتر لاحقاً بـ comprehension.
-    """
     cal = row.get("Calories", 0)
     sodium = row.get("SodiumContent", 9999)
     fat = row.get("FatContent", 9999)
@@ -245,12 +231,12 @@ def _explain_rules(row: "pd.Series", target: float) -> List[Optional[str]]:
     sugar = row.get("SugarContent", 9999)
 
     return [
-        "✅ Calories on target" if (not pd.isna(cal) and abs(float(cal) - target) <= 100) else None,
-        "✅ Low sodium" if (not pd.isna(sodium) and float(sodium) < 400) else None,
-        "✅ Low fat" if (not pd.isna(fat) and float(fat) < 10) else None,
-        "✅ High protein" if (not pd.isna(protein) and float(protein) > 25) else None,
-        "✅ Good fiber" if (not pd.isna(fiber) and float(fiber) > 5) else None,
-        "✅ Low sugar" if (not pd.isna(sugar) and float(sugar) < 10) else None,
+        " Calories on target" if (not pd.isna(cal) and abs(float(cal) - target) <= 100) else None,
+        " Low sodium" if (not pd.isna(sodium) and float(sodium) < 400) else None,
+        " Low fat" if (not pd.isna(fat) and float(fat) < 10) else None,
+        " High protein" if (not pd.isna(protein) and float(protein) > 25) else None,
+        " Good fiber" if (not pd.isna(fiber) and float(fiber) > 5) else None,
+        " Low sugar" if (not pd.isna(sugar) and float(sugar) < 10) else None,
     ]
 
 
@@ -260,17 +246,13 @@ def _time_explain(raw_time) -> Optional[str]:
     return (
         None if minutes is None
         else {
-            "quick": f"⚡ Quick ({int(minutes)} min)",
-            "moderate": f"🕐 {int(minutes)} min",
+            "quick": f" Quick ({int(minutes)} min)",
+            "moderate": f" {int(minutes)} min",
         }.get(tier)
     )
 
 
 def explain_recipe(row: "pd.Series", goal: Optional[str]) -> str:
-    """
-    أنشئ سبباً مختصراً يشرح لماذا أُوصي بهذه الوصفة — بدون أي
-    if/elif/for/while statement، فقط بناء قائمة وفلترة.
-    """
     target = 500 + (GOAL_VECTORS.get(goal, {}).get("target_calorie_offset", 0) if goal else 0)
 
     candidates = _explain_rules(row, target) + [
@@ -278,4 +260,4 @@ def explain_recipe(row: "pd.Series", goal: Optional[str]) -> str:
     ]
     reasons = [r for r in candidates if r is not None]
 
-    return " | ".join(reasons[:3]) if reasons else "⚖️ Balanced nutrition profile"
+    return " | ".join(reasons[:3]) if reasons else " Balanced nutrition profile"

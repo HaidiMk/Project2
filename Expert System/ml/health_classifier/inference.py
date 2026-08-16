@@ -1,25 +1,3 @@
-"""
-inference.py — الاستدلال على درجة الصحة الغذائية (AI Health Score)
-=====================================================================
-يحمّل مصنّف HealthClassifier المدرب + الـ scaler + مفاتيح الحالات الـ 22
-مرة واحدة فقط (singleton) عند أول استدعاء، ويحسب لكل وصفة:
-
-    ai_health_score = mean( sigmoid(logits) ) على الحالات الطبية
-    المطبّقة على المستخدم فقط (condition_keys = مثلاً ["diabetes"])
-    — الحالات غير المدرّبة (مثل label_lactose_intolerance) تُتخطّى.
-    لو لم يُمرَّر أي مفتاح أو لم يطابق أي منها المدرّبين، نستخدم
-    متوسط الحالات الـ 22 كلها (fallback محايد).
-
-التكامل:
-    engine/filtering_engine.py يستدعي ai_health_score داخل filter_recipes
-    ويضيف الناتج عموداً جديداً _ai_health_score (Layer 1.5)، ثم
-    TOPSIS/topsis_model.rank_with_topsis يدمجه بالمعادلة:
-        final = 0.4*TOPSIS + 0.4*AI + 0.2*expert_normalized
-
-المسارات كلها مطلقة (مرساة على موقع هذا الملف) — حماية من أخطاء
-الـ cwd النسبية.
-"""
-
 import json
 import sys
 from pathlib import Path
@@ -29,7 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-BASE_DIR = Path(__file__).resolve().parents[2]          # Expert System/
+BASE_DIR = Path(__file__).resolve().parents[2]          
 sys.path.insert(0, str(BASE_DIR))
 
 from ml.health_classifier.health_classifier import HealthClassifier, NUTRITION_COLS
@@ -44,7 +22,6 @@ _labels = None
 
 
 def _load():
-    """حمّل المصنّف + الـ scaler + المفاتيح مرة واحدة فقط (singleton)."""
     global _model, _scaler, _labels
     if _model is not None:
         return _model, _scaler, _labels
@@ -64,17 +41,6 @@ def _load():
 
 
 def ai_health_score(df: pd.DataFrame, condition_keys=None) -> np.ndarray:
-    """
-    متوسط احتمال (sigmoid) الحالات المطلوبة لكل وصفة في df.
-
-    المعاملات:
-        df: إطار الوصفات (يجب أن يحوي أعمدة NUTRITION_COLS الغذائية)
-        condition_keys: قائمة مفاتيح الحالات (مثل "diabetes") أو None
-            — كل مفتاح يُرسم إلى "label_<key>"؛ غير المطابق يتخطّى.
-    المخرجات:
-        np.ndarray بطول len(df) — قيم بين 0 و 1 (كلما ارتفعت كانت
-        الوصفة أكثر توافقاً مع الحالة المطلوبة).
-    """
     n = len(df)
     if n == 0:
         return np.zeros(0, dtype=np.float32)

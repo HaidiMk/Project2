@@ -1,37 +1,3 @@
-r"""
-build_taste_embeddings.py — تدريب Word2Vec على مكونات الوصفات
-=================================================================
-الخطوات:
-    1. تحميل Expert System/data/cleaned_recipes.csv
-    2. تنظيف IngredientsList بالخطة المعتمدة:
-         - ast.literal_eval (تخطي الصفوف التالفة عبر try/except)
-         - lowercase + strip لكل عنصر
-         - إزالة الملاحظات بين قوسين: re.sub(r'\([^)]*\)', '', s)
-         - إزالة الفواصل الداخلية داخل العنصر وطي المسافات
-         - ربط المكونات متعددة الكلمات بشرطة سفلية ("olive oil" -> "olive_oil")
-         - إسقاط النتائج الفارغة
-    3. حذف الوصفات ذات قوائم المكونات الفارغة (1,232) من مجموعة التدريب،
-       مع طباعة العدد فقط (بدون حفظ أي ملف إضافي)
-    4. تدريب gensim Word2Vec:
-         vector_size=150, window=6, min_count=5, workers=os.cpu_count(),
-         epochs=15, sg=1 (skip-gram)
-    5. حفظ النموذج إلى Expert System/data/word2vec_ingredients.model
-    6. فحص تحقق: top-5 most_similar لستة مكونات معروفة
-    7. حساب تضمين كل وصفة = متوسط تضمينات مكوناتها
-       والحفظ إلى Expert System/data/recipe_taste_embeddings.pkl
-
-صيغة ملف recipe_taste_embeddings.pkl (مهم لخطوة التكامل اللاحقة):
-    dict: { RecipeId (int) -> np.ndarray shape (150,) من float32 }
-    — مفاتيحه هي الـ RecipeId الأصلي من cleaned_recipes.csv لكل وصفة
-      بقائمة مكونات غير فارغة بعد التنظيف وبها رمز واحد على الأقل ضمن
-      مفردات النموذج (أي فوق min_count=5). الوصفات التي تحتوي كل مكوناتها
-      على رموز تحت min_count لا تُحفظ لها ناقلات (تُسجَّل وتُطبع فقط).
-    طريقة التحميل لاحقاً:
-        with open(path, 'rb') as f:
-            emb = pickle.load(f)      # dict
-        vec = emb[recipe_id]          # np.ndarray (150,)
-"""
-
 import ast
 import os
 import pickle
@@ -43,7 +9,7 @@ import numpy as np
 import pandas as pd
 from gensim.models import Word2Vec
 
-BASE_DIR = Path(__file__).resolve().parents[2]          # Expert System/
+BASE_DIR = Path(__file__).resolve().parents[2]        
 DATA_PATH = BASE_DIR / "data" / "cleaned_recipes.csv"
 MODEL_PATH = BASE_DIR / "data" / "word2vec_ingredients.model"
 EMBED_PATH = BASE_DIR / "data" / "recipe_taste_embeddings.pkl"
@@ -65,7 +31,6 @@ SANITY_INGREDIENTS = [
 
 
 def clean_ingredient_list(raw):
-    """خطة التنظيف المعتمدة — تُرجع قائمة رموز نظيفة (أو قائمة فارغة)."""
     if not isinstance(raw, str) or not raw.strip():
         return []
     try:
@@ -77,10 +42,10 @@ def clean_ingredient_list(raw):
     out = []
     for item in items:
         s = str(item).strip().lower()
-        s = re.sub(r"\([^)]*\)", "", s)        # إزالة الملاحظات بين قوسين
-        s = re.sub(r",", " ", s)               # إزالة الفواصل الداخلية
-        s = re.sub(r"\s+", " ", s).strip()     # طي المسافات
-        s = re.sub(r" ", "_", s)               # مكونات متعددة الكلمات -> رمز واحد
+        s = re.sub(r"\([^)]*\)", "", s)        
+        s = re.sub(r",", " ", s)           
+        s = re.sub(r"\s+", " ", s).strip()   
+        s = re.sub(r" ", "_", s)             
         if s:
             out.append(s)
     return out

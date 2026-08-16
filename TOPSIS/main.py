@@ -1,24 +1,10 @@
-"""
-main.py — نقطة الدخول الموحّدة (Expert System ثم TOPSIS)
-===========================================================
-التسلسل:
-    1. تحميل البيانات وتشغيل النظام الخبير (Layer 1)
-    2. المستخدم يدخل بياناته مرة واحدة فقط (build_profile_interactive)
-    3. طباعة نتيجة النظام الخبير كما هي (print_results)
-    4. تطبيق TOPSIS على نفس الوصفات الآمنة وطباعة ترتيبها (Layer 2)
-
-شغّله من جوا مجلد TOPSIS:
-    python main.py
-"""
-
 import sys
 from pathlib import Path
 
-# ── إضافة مجلد "Expert System" لمسار البحث ──────────────────
 EXPERT_SYSTEM_DIR = Path(__file__).resolve().parent.parent / "Expert System"
 sys.path.insert(0, str(EXPERT_SYSTEM_DIR))
 
-from main import load_data                       # تحميل CSV (من Expert System)
+from main import load_data                 
 from engine.filtering_engine import DietaryExpertSystem
 from ui.cli_interface import build_profile_interactive, print_results
 
@@ -26,7 +12,6 @@ from topsis_model import topsis_score, rank_with_topsis
 
 
 def print_old_vs_new(ranked_df, top_n: int = 5):
-    """قارن ترتيب TOPSIS القديم (وحده) مع الترتيب المدمج الجديد (3 مصادر)."""
     print("\n" + "=" * 90)
     print("  Old (TOPSIS-only) vs New (blended) ranking".center(88))
     print("=" * 90)
@@ -54,7 +39,6 @@ def print_old_vs_new(ranked_df, top_n: int = 5):
 
 
 def print_topsis_results(ranked_df, top_n: int = 10):
-    """طباعة نتيجة TOPSIS المدمجة (Layer 2) — مع مكوّنات الدرجة."""
     has_taste = "_taste_score" in ranked_df.columns
     blend_txt = ("0.35*TOPSIS + 0.35*AI + 0.15*Expert + 0.15*Taste"
                  if has_taste else "0.4*TOPSIS + 0.4*AI + 0.2*Expert")
@@ -97,21 +81,17 @@ def print_topsis_results(ranked_df, top_n: int = 10):
 
 
 def main():
-    # ── 1) تحميل البيانات + تشغيل النظام الخبير ────────────
     df = load_data()
     system = DietaryExpertSystem(df)
 
     try:
-        # ── 2) إدخال بيانات المستخدم (مرة واحدة فقط) ───────
         profile = build_profile_interactive()
 
         print("\n⏳  Generating personalized meal plan...\n")
 
-        # ── 3) نتيجة النظام الخبير (Layer 1) ────────────────
         result = system.filter_recipes(profile)
         print_results(result, top_n=15)
 
-        # ── 4) إدخال تفضيلات الذوق (اختياري) ──────────────────
         taste_text = input(
             "\n  Describe your food preferences — separate liked and disliked with ';' or 'but',\n"
             "  and start the disliked part with 'dislike', 'hate', or 'avoid'\n"
@@ -119,7 +99,6 @@ def main():
         ).strip()
         taste_text = taste_text or None
 
-        # ── 5) تطبيق الترتيب المدمج على نفس الوصفات الآمنة (Layer 2) ─
         ranked = rank_with_topsis(
             result["safe_recipes"], profile.goal, user_taste_text=taste_text
         )
@@ -127,13 +106,13 @@ def main():
         print_topsis_results(ranked, top_n=10)
 
     except ValueError as ve:
-        print(f"\n❌ Validation error: {ve}")
+        print(f"\n Validation error: {ve}")
 
     except KeyboardInterrupt:
-        print("\n\n👋 Exited.")
+        print("\n\n Exited.")
 
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"\n Unexpected error: {e}")
         import traceback
         traceback.print_exc()
 

@@ -1,11 +1,3 @@
-# Mirrored from Expert System/core/constants.py — keep in sync
-# manually if the canonical lists change there.
-
-# Canonical vocabulary lists used for semantic matching. This local, static
-# copy is what makes the Nlp/ package fully standalone: it has zero import
-# dependency on Expert System/ (or anything else) at runtime.
-
-
 DISEASE_EN = {
     "diabetes":                 "Diabetes",
     "hypertension":             "Hypertension (High Blood Pressure)",

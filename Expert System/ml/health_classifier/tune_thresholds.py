@@ -1,17 +1,3 @@
-"""
-tune_thresholds.py — معايرة عتبات التنبؤ لكل حالة (على مجموعة التحقق فقط)
-=========================================================================
-- يعيد إنتاج نفس التقسيم عبر دوال health_classifier نفسها (نفس البذرة،
-  نفس proxy التقسيم على label_diabetes).
-- يستخدم نموذج + scaler المحفوظين — لا تدريب ولا لمس للأوزان.
-- لكل حالة من الـ 22: مسح عتبات 0.10..0.95 بخطوة 0.05 على مجموعة
-  التحقق، واختيار العتبة الأعلى F1. عند التساوي: أدنى عتبة (الأكثر
-  تحفظاً — recall أعلى، بمعنى "الشك لصالح المريض").
-- مجموعة الاختبار لا تُلمس هنا إطلاقاً — تبقى للتقارير النهائية فقط.
-- الحفظ: Expert System/data/health_classifier_thresholds.json
-  (مفاتيح بنفس صيغة health_classifier_labels.json: "label_<condition>")
-"""
-
 import json
 import sys
 from pathlib import Path
@@ -24,7 +10,7 @@ from sklearn.metrics import f1_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from health_classifier import (                    # إعادة استخدام مباشرة
+from health_classifier import (           
     set_seed, load_data, train_val_test_split,
     HealthClassifier, SCALER_PATH, MODEL_PATH,
 )
@@ -33,7 +19,7 @@ THRESHOLDS_PATH = (
     Path(__file__).resolve().parents[2] / "data" / "health_classifier_thresholds.json"
 )
 
-GRID = np.arange(0.10, 0.951, 0.05)                 # 18 عتبة مرشّحة
+GRID = np.arange(0.10, 0.951, 0.05)        
 
 
 def main():

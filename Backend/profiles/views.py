@@ -11,16 +11,6 @@ class UserProfileView(
     mixins.UpdateModelMixin,
     generics.GenericAPIView,
 ):
-    """
-    GET   /api/profiles/me/  -> retrieve your own profile
-    POST  /api/profiles/me/  -> create it (first time only)
-    PUT   /api/profiles/me/  -> replace it entirely
-    PATCH /api/profiles/me/  -> partially update it
-
-    No <id> in the URL on purpose: this endpoint always resolves to
-    request.user's own profile, so there's nothing to look up by pk and
-    no way for one user to read another user's data by guessing an id.
-    """
 
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -48,6 +38,4 @@ class UserProfileView(
         return self.partial_update(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        # user is deliberately excluded from the serializer's fields -
-        # this is where it actually gets tied to the caller.
         serializer.save(user=self.request.user)

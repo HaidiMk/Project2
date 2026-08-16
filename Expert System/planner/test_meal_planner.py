@@ -11,9 +11,6 @@ t0 = time.time()
 system = DietaryExpertSystem(load_data())
 print(f"جاهز خلال {time.time()-t0:.1f} ثانية\n")
 
-# ─────────────────────────────────────────
-# بروفايل 1: مريض سكري، هدف خسارة وزن
-# ─────────────────────────────────────────
 profile1 = UserProfile(
     age=45, height=172.0, weight=88.0, gender='male',
     conditions=['diabetes'], goal='weight_loss', activity_level='light'

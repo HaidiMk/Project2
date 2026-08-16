@@ -17,12 +17,12 @@ IMPOSSIBLE_CONDITION_PAIRS = [
 
 _IMPOSSIBLE_MESSAGES = {
     ("obesity", "underweight"): (
-        "⚠️ Contradictory input: 'Obesity' and 'Underweight' cannot "
+        " Contradictory input: 'Obesity' and 'Underweight' cannot "
         "both apply (opposite BMI categories). Both conditions ignored "
         "— please verify your selection."
     ),
     ("hypothyroidism", "hyperthyroidism"): (
-        "⚠️ Contradictory input: 'Hypothyroidism' and 'Hyperthyroidism' "
+        " Contradictory input: 'Hypothyroidism' and 'Hyperthyroidism' "
         "cannot both apply (opposite thyroid states). Both conditions "
         "ignored — please verify your selection."
     ),
@@ -173,7 +173,6 @@ def _min_requirements_for(rules_list: List[dict]) -> dict:
 
 
 def _conditions_block(profile: "UserProfile") -> dict:
-    """numeric + strict/soft_block + preferred + warnings + notes من الحالات الطبية."""
     conds = _known_conditions(profile.conditions, profile.gender)
     rules_list = [MEDICAL_RULES[c] for c in conds]
 
@@ -311,10 +310,6 @@ def _preferences_block(preferences: List[str]) -> dict:
 
 
 def _combine_blocks(blocks: List[dict]) -> dict:
-    """
-    يدمج كل النتائج الجزئية (life_stage, conditions, allergies, combined, preferences)
-    في قاموس واحد نهائي — بدون أي حلقة إجرائية، فقط reduce + comprehension.
-    """
     numeric_merged = _merge_many_numeric([b.get("numeric_rules", {}) for b in blocks])
     
     min_reqs = reduce(lambda acc, b: {**acc, **b.get("min_requirements", {})}, blocks, {})
@@ -338,10 +333,6 @@ def _combine_blocks(blocks: List[dict]) -> dict:
 
 
 def get_applicable_rules(profile: "UserProfile") -> dict:
-    """
-    نقطة الدخول العامة — نفس التوقيع والمخرجات تماماً كالنسخة الأصلية،
-    لكن بدون أي if/elif/for/while في كامل مسار التنفيذ.
-    """
     blocks = [
         _life_stage_block(profile),
         _conditions_block(profile),
@@ -353,13 +344,6 @@ def get_applicable_rules(profile: "UserProfile") -> dict:
 
 
 def get_applicable_condition_keys(profile: "UserProfile") -> List[str]:
-    """
-    مفاتيح الحالات المطبّقة فعلياً على المستخدم — مصدر condition_keys
-    لطبقة الذكاء الاصطناعي (ml/health_classifier/inference.ai_health_score):
-        الحالات الطبية المعروفة (بعد استبعاد المستحيلة وغير المؤنثة)
-        + الحمل/الفئة العمرية (children/elderly) إن طبّقت.
-    المفاتيح تطابق لاحقة ملصقات التدريب: "diabetes" → "label_diabetes".
-    """
     return (
         _known_conditions(profile.conditions, profile.gender)
         + _life_stage_rule_keys(profile)

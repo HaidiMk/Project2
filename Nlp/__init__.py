@@ -1,5 +1,3 @@
-"""NLP query-parsing utilities for the Expert System (semantic matching)."""
-
 from .query_parser import (
     VAGUE_TERMS,
     extract_numeric_constraints,

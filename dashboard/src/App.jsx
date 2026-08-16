@@ -5,10 +5,6 @@ import RecommendationsTable from "./components/RecommendationsTable.jsx";
 import RecommendationChart from "./components/RecommendationChart.jsx";
 import StatusMessage from "./components/StatusMessage.jsx";
 
-// Admin/Viewer Dashboard (UC-11). Opens directly — no normal-user login,
-// no UserProfile dependency. Reads exclusively from the future Django
-// Dashboard API (src/services/api.js); until that endpoint exists, every
-// section renders its documented neutral empty state instead of fake data.
 export default function App() {
   const { data, loading, unavailable } = useDashboardData();
   const stats = data?.stats;
