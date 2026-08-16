@@ -6,6 +6,7 @@ from .views import (
     RecipeDetailView,
     RecommendationsView,
     SearchView,
+    MealPlannerView
 )
 
 app_name = "recipes"
@@ -16,4 +17,5 @@ urlpatterns = [
     path("<int:recipe_id>/alternatives/", AlternativesView.as_view(), name="recipe-alternatives"),
     path("<int:recipe_id>/explanation/", ExplanationView.as_view(), name="recipe-explanation"),
     path("<int:recipe_id>/", RecipeDetailView.as_view(), name="recipe-detail"),
+    path("meal-planner/", MealPlannerView.as_view(), name="meal-planner"),  
 ]

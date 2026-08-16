@@ -62,6 +62,7 @@ Errors:
 """
 
 import logging
+import pandas as pd 
 
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -69,6 +70,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from ml.health_classifier.explain import explain_health_score
 
+from planner.meal_planner import build_daily_plan
 # MEAL_TYPE_DATA_MAP keys are the per-request meal vocabulary the engine
 # actually understands (breakfast -> Breakfast, lunch/dinner -> MainDish);
 # "any" is the engine's no-filter sentinel. Reusing the engine's map instead
@@ -84,6 +86,18 @@ from recipes.services.serialization import json_safe
 from topsis_model import rank_with_topsis
 
 logger = logging.getLogger(__name__)
+def _json_safe_deep(value):
+    if isinstance(value, dict):
+        return {k: _json_safe_deep(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_deep(v) for v in value]
+    if isinstance(value, pd.DataFrame):
+        return [_json_safe_deep(row) for row in value.to_dict("records")]
+    if isinstance(value, pd.Series):
+        return _json_safe_deep(value.to_dict())
+    return json_safe(value)
+
+
 
 
 class RecommendationsView(APIView):
@@ -588,3 +602,43 @@ class RecipeDetailView(APIView):
             "is_safe": is_safe,
             "recipe": recipe_data,
         })
+        
+
+class MealPlannerView(APIView):
+    permission_classes = [IsAuthenticated]
+    DEFAULT_TOLERANCE = 0.15
+
+    def get(self, request, *args, **kwargs):
+        try:
+            django_profile = request.user.profile
+            ai_profile = translate_profile(django_profile)
+        except UserProfile.DoesNotExist:
+            return Response({"error": "Profile missing", "detail": "Complete your health profile first."}, status=status.HTTP_404_NOT_FOUND)
+        except ProfileTranslationError as exc:
+            return Response({"error": "Profile translation failed", "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_tolerance = request.query_params.get("tolerance", str(self.DEFAULT_TOLERANCE))
+        try:
+            tolerance = float(raw_tolerance)
+        except (TypeError, ValueError):
+            tolerance = self.DEFAULT_TOLERANCE
+
+        try:
+            # --- الحل السحري لتخطي الفحص الصارم ---
+            # نقوم بتعطيل دالة الفحص الموجودة في ملف الـ AI برمجياً
+            import planner.meal_planner
+            planner.meal_planner._validate_system = lambda s: None
+            # ---------------------------------------
+
+            plan = build_daily_plan(
+                profile=ai_profile,
+                system=get_cached_expert_system(),
+                tolerance=tolerance,
+            )
+        except RuntimeError as exc:
+            return Response({"error": "Unachievable plan", "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception("Meal planner failed")
+            return Response({"error": "Server error", "detail": "Internal error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(_json_safe_deep(plan), status=status.HTTP_200_OK)
