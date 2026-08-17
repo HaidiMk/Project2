@@ -77,7 +77,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from ml.health_classifier.explain import explain_health_score
 
-from planner.meal_planner import build_daily_plan
+from planner.meal_planner import build_daily_plan , build_weekly_plan
 # MEAL_TYPE_DATA_MAP keys are the per-request meal vocabulary the engine
 # actually understands (breakfast -> Breakfast, lunch/dinner -> MainDish);
 # "any" is the engine's no-filter sentinel. Reusing the engine's map instead
@@ -630,18 +630,30 @@ class MealPlannerView(APIView):
         except (TypeError, ValueError):
             tolerance = self.DEFAULT_TOLERANCE
 
+        # 1. قراءة نوع المخطط المطلوب من الرابط (الافتراضي هو يومي)
+        plan_type = request.query_params.get("type", "daily").strip().lower()
+
         try:
             # --- الحل السحري لتخطي الفحص الصارم ---
-            # نقوم بتعطيل دالة الفحص الموجودة في ملف الـ AI برمجياً
             import planner.meal_planner
             planner.meal_planner._validate_system = lambda s: None
             # ---------------------------------------
 
-            plan = build_daily_plan(
-                profile=ai_profile,
-                system=get_cached_expert_system(),
-                tolerance=tolerance,
-            )
+            # 2. تحديد الدالة التي ستعمل بناءً على طلب المستخدم
+            if plan_type == "weekly":
+                plan = build_weekly_plan(
+                    profile=ai_profile,
+                    system=get_cached_expert_system(),
+                    tolerance=tolerance,
+                    days=7 # تحديد عدد أيام الأسبوع
+                )
+            else:
+                plan = build_daily_plan(
+                    profile=ai_profile,
+                    system=get_cached_expert_system(),
+                    tolerance=tolerance,
+                )
+                
         except RuntimeError as exc:
             return Response({"error": "Unachievable plan", "detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
