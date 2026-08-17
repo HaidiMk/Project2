@@ -61,6 +61,13 @@ Errors:
              message returned (no stack trace leaked to the client)
 """
 
+import json
+from django.contrib.auth.models import User
+from rest_framework.permissions import IsAdminUser
+from django.conf import settings
+from pathlib import Path
+
+
 import logging
 import pandas as pd 
 
@@ -642,3 +649,111 @@ class MealPlannerView(APIView):
             return Response({"error": "Server error", "detail": "Internal error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(_json_safe_deep(plan), status=status.HTTP_200_OK)
+    
+    
+
+
+
+
+
+def _dashboard_safe_metric(fn):
+    """Run fn(); on ANY failure, log it and return None instead of letting
+    one broken metric take the whole dashboard endpoint down with it."""
+    try:
+        return fn()
+    except Exception:
+        logger.exception("Dashboard metric failed: %s", getattr(fn, "__name__", fn))
+        return None
+
+
+def _dashboard_total_users():
+    return User.objects.count()
+
+
+def _dashboard_completed_profiles():
+    return UserProfile.objects.count()
+
+
+def _dashboard_total_recipes():
+    # Recipes live in the Expert System's in-memory DataFrame (see
+    # ExplanationView's use of expert_system.df above), not a Django model.
+    # get_cached_expert_system() is already cached, so this is just an
+    # attribute read, not a re-load.
+    return len(get_cached_expert_system().df)
+
+
+def _dashboard_supported_goals():
+    # UserProfile.Goal is a real Django TextChoices enum - already exact.
+    return len(UserProfile.Goal.choices)
+
+
+def _dashboard_supported_conditions():
+    # TODO: point this at the real source of truth for medical conditions
+    # in the Expert System (e.g. engine/filtering_engine.py's RULES_MEDICAL
+    # or equivalent). Left unimplemented rather than guessing a name that
+    # might not exist - returns null until you fill this in.
+    raise NotImplementedError("point this at the real medical-conditions rules source")
+
+
+def _dashboard_supported_allergies():
+    # TODO: same idea, for the allergy rules source.
+    raise NotImplementedError("point this at the real allergy rules source")
+
+
+def _dashboard_health_classifier_metrics():
+    metrics_path = (
+        settings.BASE_DIR.parent / "Expert System" / "ml" / "health_classifier"
+        / "results" / "metrics.json"
+    )
+    with open(metrics_path, encoding="utf-8") as f:
+        data = json.load(f)
+    return {
+        "accuracy": data.get("accuracy"),
+        "precision": data.get("precision"),
+        "recall": data.get("recall"),
+        "f1_score": data.get("f1_score"),
+    }
+
+
+class DashboardStatsView(APIView):
+    """
+    GET /api/recipes/dashboard/stats/  (adjust if you wire this at a
+    different path in urls.py - see the note in chat about the documented
+    /api/dashboard/stats/ contract)
+
+    Read-only, system-wide statistics for the React admin dashboard.
+    Staff-only (request.user.is_staff via IsAdminUser) - reuses Django's
+    built-in is_staff flag and the SAME TokenAuthentication already used
+    for Flutter, rather than inventing a separate admin auth system.
+    Never touches Expert System/TOPSIS/NLP logic - only counts or reads
+    what already exists. Every stat defaults to None (-> JSON null) on
+    failure, so one broken metric never takes the whole endpoint down.
+    """
+
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        health_metrics = _dashboard_safe_metric(_dashboard_health_classifier_metrics) or {
+            "accuracy": None, "precision": None, "recall": None, "f1_score": None,
+        }
+
+        return Response({
+            "stats": {
+                "total_users": _dashboard_safe_metric(_dashboard_total_users),
+                "completed_profiles": _dashboard_safe_metric(_dashboard_completed_profiles),
+                "total_recipes": _dashboard_safe_metric(_dashboard_total_recipes),
+                "supported_conditions": _dashboard_safe_metric(_dashboard_supported_conditions),
+                "supported_allergies": _dashboard_safe_metric(_dashboard_supported_allergies),
+                "supported_goals": _dashboard_safe_metric(_dashboard_supported_goals),
+                # No RecommendationHistory / SearchHistory model exists yet
+                # anywhere in this project - per spec, that's null, not a
+                # fabricated number or a fake user+recommendation run.
+                "recommendations_count": None,
+                "search_count": None,
+            },
+            "model_metrics": {
+                "health_classifier": health_metrics,
+            },
+            "results": [],
+            "chart_data": [],
+        }, status=status.HTTP_200_OK)
