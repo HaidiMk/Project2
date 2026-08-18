@@ -1,186 +1,81 @@
-````markdown
-# Smart Dietary Advisor — v4.0
-## نظام التغذية الذكي — Expert System
+# Expert System
 
-قسم الذكاء الاصطناعي — مشروع السنة الرابعة 2024-2025
+This folder is the core of the Smart Dietary Advisor: the rule engine that
+decides which recipes are medically safe for a user, the two trained models
+that score and personalize the safe ones, and a meal-plan builder on top.
 
----
+## What's in here, at a glance
 
-## نبذة عن المشروع
+- **A rule-based safety filter** — hand-written medical, allergy, halal, and
+  diet-preference rules. This is the hard gate: nothing unsafe for a user's
+  stated conditions or allergies gets past it.
+- **Two trained models** — one learns how well a recipe's nutrition fits a
+  user's medical conditions, the other learns ingredient meaning so it can
+  match recipes to a free-text taste description ("I love garlic, dislike
+  seafood"). Both feed into the final recipe ranking alongside the rules.
+- **A meal planner** — builds a full day (or week) of breakfast/lunch/dinner
+  out of the same safe, ranked recipes, without repeats and within a calorie
+  target.
 
-نظام ذكاء اصطناعي متكامل يجمع بين ثلاث تقنيات:
-- **Expert System** — قواعد طبية صارمة (24 حالة، 40+ تركيبة دمج)
-- **Content-Based Filtering** — تصفية وترتيب بناءً على القيم الغذائية
-- **Deep Health Classifier** — مصنّف شبكي (MLP) يقيس توافق الوصفة مع حالات المستخدم الطبية
+The recipe database behind all of this is the cleaned Food.com dataset:
+**384,541 recipes** with full nutritional info.
 
-قاعدة البيانات: **384,541 وصفة** مع قيمها الغذائية الكاملة
-
----
-
-## متطلبات التشغيل
+## Requirements
 
 ```bash
 pip install pandas numpy torch scikit-learn
 ```
 
----
-
-## تشغيل النظام
+## Running it
 
 ```bash
-# واجهة تفاعلية
+# interactive command-line demo
 python main.py
 
-# مثال جاهز (سكري + ضغط دم)
+# a ready-made example (diabetes + hypertension)
 python main.py --demo
 
-# تحليل البيانات EDA
+# a quick look at the dataset
 python eda_report.py
-
-# اختبار شامل للنظام
-python test_system.py
 ```
 
----
-
-## هيكل الملفات
+## Folder layout
 
 ```
-expert_split/
-│
-├── main.py                        ← نقطة الدخول
-├── eda_report.py                  ← تحليل البيانات
-├── test_system.py                 ← اختبارات النظام (16/16)
-│
-├── core/
-│   ├── constants.py               ← الثوابت والقواميس
-│   └── user_profile.py            ← كلاس UserProfile (BMI, BMR, السعرات)
-│
-├── rules/
-│   ├── medical_rules.py           ← القواعد الطبية (24 حالة)
-│   ├── combined_rules.py          ← قواعد الدمج (40+ تركيبة)
-│   ├── halal_and_allergies.py     ← فلتر الحلال + الحساسيات
-│   └── goals_and_preferences.py   ← الأهداف والتفضيلات
-│
-├── engine/
-│   ├── rule_builder.py            ← تجميع القواعد
-│   ├── scorer.py                  ← تقييم الوصفات
-│   └── filtering_engine.py        ← المحرك الرئيسي
-│
-├── ui/
-│   └── cli_interface.py           ← واجهة سطر الأوامر
-│
-├── data/
-│   └── cleaned_recipes.csv        ← قاعدة البيانات (384,541 وصفة)
-│
-└── output/
-    ├── safe_recipes.csv
-    ├── safe_recipes.json
-    └── eda_report.txt
+Expert System/
+├── main.py              ← entry point
+├── eda_report.py         ← dataset overview
+├── core/                 ← user profile + shared constants
+├── rules/                ← medical, allergy/halal, and preference rules
+├── engine/                ← the filtering + scoring engine
+├── ui/                    ← command-line interface
+├── data/                  ← the recipe dataset and trained model files
+├── ml/
+│   ├── health_classifier/  ← Model 1 — nutrition/condition suitability scorer
+│   └── word2vec/            ← Model 2 — ingredient embeddings + taste matching
+└── planner/               ← daily/weekly meal-plan builder
 ```
 
----
+## What it covers
 
-## المستخدمون المدعومون
+The rule engine currently has **28 medical rule entries** spanning children,
+teens, adults, and elderly users (things like diabetes, hypertension, kidney
+disease, pregnancy, and more), plus **7 allergy categories** (peanuts, milk,
+eggs, seafood, soy, gluten, sesame) and an always-on halal filter.
 
-| الفئة | العمر | الأمراض المتاحة | ملاحظة |
-|-------|-------|-----------------|--------|
-| Child | 1-12 | 7 أمراض | بدون سؤال النشاط البدني |
-| Teen | 13-17 | 11 مرض | |
-| Adult | 18-64 | 21 مرض + PCOS للإناث | |
-| Elderly | 65+ | 16 مرض | |
+## Checking it works
 
----
-
-## الحالات الطبية المدعومة (24 حالة)
-
-| المجموعة | الحالات |
-|----------|---------|
-| القلب والأوعية | Hypertension, Heart Disease, High Cholesterol |
-| الغدد | Diabetes, Hypothyroidism, Hyperthyroidism, PCOS |
-| الجهاز الهضمي | GERD, IBS, Crohn's Disease, Constipation, Hepatitis |
-| الكلى والمفاصل | Chronic Kidney Disease, Gout, Osteoporosis |
-| الدم والوزن | Anemia, Obesity, Underweight |
-| الحساسيات | Gluten Intolerance, Lactose Intolerance |
-| خاص | Pregnancy, Asthma |
-
----
-
-## الحساسيات المدعومة (6 أنواع)
-
-Peanuts / Tree Nuts, Milk and Dairy, Eggs, Seafood, Soy, Gluten
-
----
-
-## نتائج EDA — تحليل البيانات
-
-| المقياس | القيمة |
-|---------|--------|
-| إجمالي الوصفات | 384,541 |
-| متوسط السعرات | 351 kcal/وجبة |
-| متوسط التقييم | 4.63 / 5.0 |
-| وصفات آمنة للسكري | 66.6% |
-| وصفات آمنة لضغط الدم | 71.3% |
-| وصفات تحتوي لاكتوز | 59.5% |
-| قيم مفقودة | 0% |
-
----
-
-## طبقات نظام الخبير
-
-```
-المستخدم يدخل بياناته
-        ↓
-1. فلتر الحلال          ← أولوية مطلقة
-        ↓
-2. فلتر الحساسيات       ← أعمدة CSV
-        ↓
-3. الحدود الرقمية       ← القواعد الطبية
-        ↓
-4. فلتر نوع الوجبة      ← فطور/غداء/عشاء
-        ↓
-5. فلتر المكونات        ← strict_block
-        ↓
-6. فلتر اسم الوصفة      ← Name column
-        ↓
-7. Expert Score         ← scorer.py (ترتيب الوصفات الآمنة)
-        ↓
-النتائج الآمنة المرتبة
+```bash
+cd ../TOPSIS
+python sanity_check.py                                    # full pipeline regression suite
+cd ..
+python "Expert System/ml/word2vec/test_alternatives.py"   # taste-based alternatives smoke test
+python "Expert System/planner/test_meal_planner.py"        # meal planner smoke test
+python Nlp/test_query_parser.py                            # smart-search parser checks
 ```
 
-> الترتيب النهائي للمستخدم يُحسب في طبقة TOPSIS المدمجة:
-> `final = 0.4*TOPSIS + 0.4*AI health + 0.2*expert_normalized`
+## More detail
 
----
-
-## اختبارات النظام
-
-```
-✅ 16/16 Tests Passed
-   - Diabetes rules
-   - Hypertension rules
-   - Halal filter
-   - PCOS females only
-   - Impossible combinations
-   - Vegetarian filter
-   - Pregnancy + Diabetes combined
-   - Activity level affects calories
-```
-
----
-
-## المصادر الطبية
-
-| المصدر | الحالة |
-|--------|--------|
-| ADA Standards of Care 2025 | Diabetes |
-| AHA/ACC Guidelines 2025 | Heart Disease, Hypertension |
-| WHO Guidelines 2023 | Hypertension, General |
-| NKF/KDIGO Guidelines 2024 | Chronic Kidney Disease |
-| ACG Clinical Guidelines 2022-2023 | GERD, IBS, Crohn's |
-| ACOG Guidelines 2021 | Pregnancy |
-| ESPEN Guidelines 2019 | Elderly Nutrition |
-| NOF + AACE 2020 | Osteoporosis |
-| ACR Guidelines 2020 | Gout |
-| GINA 2024 | Asthma |
-````
+For the full technical write-up — model training, evaluation numbers, API
+contracts, and known limitations — see the `README.md` at the repository
+root.

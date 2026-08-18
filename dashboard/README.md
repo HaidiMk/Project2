@@ -1,84 +1,40 @@
 # Smart Dietary Advisor — Dashboard
 
-A standalone, read-only React dashboard implementing **UC-11 (View Dashboard)**:
-Admin/Viewer → React Dashboard → Django Dashboard API → statistics and results.
+A small, read-only React dashboard for an admin/viewer to check on the
+system at a glance — total recipes, users, supported conditions and
+allergies, and how well the health-scoring model is performing.
 
-This project is intentionally separate from `Backend/`, `Expert System/`, `TOPSIS/`,
-and `Nlp/` — it only *consumes* a Django REST API over HTTP and never modifies
-backend code, data, or behavior.
+This is a separate project from `Backend/`, `Expert System/`, `TOPSIS/`, and
+`Nlp/` — it only calls the Django API over HTTP and never touches backend
+code or data directly.
 
 ## Scope
 
-This Dashboard is for an **Admin/Viewer**, not the normal end user. It does not
-use the Flutter app's login flow, does not depend on a `UserProfile`, and has
-no meal-type/taste-text/personal-recommendation controls — those belong to the
-end-user application. There is no user management, recipe management, or
-medical-condition management here.
+This dashboard is for an admin/viewer, not the everyday end user. It doesn't
+use the mobile app's login flow, doesn't need a personal health profile, and
+has no recommendation, search, or meal-planning controls — those belong to
+the end-user app. There's no user management or recipe management here,
+just statistics.
 
-## Backend status: awaiting implementation
+## What it shows
 
-The dedicated Django Dashboard API this project is built against **does not
-exist yet**. The backend team will implement it separately. Until then:
+- Stat cards: total recipes, total users, completed profiles, supported
+  goals, supported conditions, supported allergies.
+- A toggle to view those as numbers, a bar chart, or both.
+- A "Health Classifier Performance" section (accuracy/precision/recall/F1)
+  for the model that scores recipes against medical conditions.
 
-- Stat cards display `—`
-- The results section displays "No results available yet."
-- The chart displays "Chart data will appear when Dashboard API data is available."
-- A single banner reads "Waiting for backend Dashboard API."
+Every number comes straight from the backend — nothing is hard-coded or
+faked. If the backend is unreachable, the page shows a clear "unavailable"
+message instead of guessing.
 
-No fake/sample numbers are hard-coded anywhere in this project. The Dashboard
-is designed to run and be previewed even with no backend running at all — it
-simply shows the neutral waiting/empty states above.
+## How it connects to the backend
 
-## Proposed future API contract
-
-This is a **provisional frontend/backend integration contract only**. Every
-`null`/empty value below means "value not supplied yet" — it is a shape
-placeholder, not a real project statistic. The backend team may adjust field
-names or structure when they implement the endpoint.
-
-```json
-{
-  "stats": {
-    "total_recipes": null,
-    "supported_conditions": null,
-    "supported_allergies": null,
-    "recommendations_count": null
-  },
-  "results": [],
-  "chart_data": []
-}
-```
-
-`results[]` items and `chart_data[]` items are expected to eventually look like:
-
-```json
-{
-  "name": "string",
-  "final_score": null,
-  "calories": null,
-  "protein": null,
-  "ai_health_score": null,
-  "expert_score": null
-}
-```
-
-```json
-{ "label": "string", "value": null }
-```
-
-When the backend team confirms the final contract, update:
-
-- `src/config/api.js` — `DASHBOARD_STATS_PATH` (and `API_BASE_URL` via `.env` if needed)
-- `src/services/api.js` — `fetchDashboardData()` and the contract comment
-- `src/components/RecommendationsTable.jsx` / `RecommendationChart.jsx` — field names read from `results[]` / `chart_data[]`, if they change
-
-## Prerequisites
-
-- **Node.js with npm** — required, to run this frontend at all.
-- **Django backend running** (see `Backend/`) — only required once the backend
-  team implements the Dashboard endpoint and you want to test real API
-  integration. Not needed just to preview the Dashboard's layout and empty
-  states.
+The dashboard calls `GET /api/recipes/dashboard/stats/` on the Django
+backend. That endpoint is live and working, and currently doesn't require
+logging in. Two of the numbers it returns — `recommendations_count` and
+`search_count` — are still always `null`, since the project doesn't track
+recommendation/search history yet.
 
 ## Setup
 
@@ -89,29 +45,20 @@ npm install
 
 Then create your local `.env` file from the template:
 
-- **Windows (PowerShell):**
-  ```powershell
-  Copy-Item .env.example .env
-  ```
-- **Windows (Command Prompt):**
-  ```cmd
-  copy .env.example .env
-  ```
-- **macOS/Linux:**
-  ```bash
-  cp .env.example .env
-  ```
+- **Windows (PowerShell):** `Copy-Item .env.example .env`
+- **Windows (cmd):** `copy .env.example .env`
+- **macOS/Linux:** `cp .env.example .env`
 
-Or simply duplicate `.env.example` in File Explorer and rename the copy to `.env`.
-
-`VITE_API_BASE_URL` in `.env` only matters once a real Dashboard API exists to
-point at (default `http://localhost:8000`). Then run:
+`VITE_API_BASE_URL` in `.env` controls which backend the dashboard talks to
+(default `http://localhost:8000`). Then:
 
 ```bash
 npm run dev
 ```
 
-Open the printed local URL (default `http://localhost:5173`).
+Open the printed local URL (default `http://localhost:5173`). Make sure the
+Django backend (see `Backend/`) is running first, or you'll see the
+"unavailable" state.
 
 ## Build
 
@@ -120,8 +67,26 @@ npm run build
 npm run preview
 ```
 
-## Configuration
+## Project layout
 
-The Django API base URL and Dashboard endpoint path are set once, in
-`src/config/api.js` (base URL from `.env`'s `VITE_API_BASE_URL`). No component
-hard-codes a URL.
+```
+dashboard/
+├── src/
+│   ├── App.jsx                     ← main page layout
+│   ├── components/
+│   │   ├── Header.jsx
+│   │   ├── StatCard.jsx
+│   │   ├── StatusMessage.jsx
+│   │   ├── ViewModeSelector.jsx    ← numbers/chart/both toggle
+│   │   └── OverviewChart.jsx       ← bar chart
+│   ├── hooks/useDashboardData.js   ← fetches + tracks loading/error state
+│   ├── services/api.js             ← the actual fetch call
+│   ├── config/api.js               ← API base URL + endpoint path
+│   └── utils/format.js             ← number/percent display formatting
+└── .env.example
+```
+
+## More detail
+
+For the full picture of how the backend and the rest of the project fit
+together, see the `README.md` at the repository root.

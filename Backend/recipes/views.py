@@ -700,30 +700,28 @@ def _dashboard_supported_goals():
 
 
 def _dashboard_supported_conditions():
-    # TODO: point this at the real source of truth for medical conditions
-    # in the Expert System (e.g. engine/filtering_engine.py's RULES_MEDICAL
-    # or equivalent). Left unimplemented rather than guessing a name that
-    # might not exist - returns null until you fill this in.
-    raise NotImplementedError("point this at the real medical-conditions rules source")
+    from rules.medical_rules import MEDICAL_RULES
+    return len(MEDICAL_RULES)
 
 
 def _dashboard_supported_allergies():
-    # TODO: same idea, for the allergy rules source.
-    raise NotImplementedError("point this at the real allergy rules source")
+    from rules.halal_and_allergies import ALLERGY_RULES
+    return len(ALLERGY_RULES)
 
 
 def _dashboard_health_classifier_metrics():
     metrics_path = (
         settings.BASE_DIR.parent / "Expert System" / "ml" / "health_classifier"
-        / "results" / "metrics.json"
+        / "results" / "metrics_tuned.json"
     )
     with open(metrics_path, encoding="utf-8") as f:
         data = json.load(f)
+    macro = data["macro_average"]
     return {
-        "accuracy": data.get("accuracy"),
-        "precision": data.get("precision"),
-        "recall": data.get("recall"),
-        "f1_score": data.get("f1_score"),
+        "accuracy": macro.get("accuracy"),
+        "precision": macro.get("precision"),
+        "recall": macro.get("recall"),
+        "f1_score": macro.get("f1"),
     }
 
 
