@@ -1,0 +1,161 @@
+:root {
+  --green: #2e7d32;
+  --green-dark: #1b5e20;
+  --green-light: #e8f5e9;
+  --border: #e0e0e0;
+  --text: #212121;
+  --muted: #6b6b6b;
+  --bg: #f7f8f7;
+  --waiting-bg: #eef1f4;
+  --waiting-text: #445;
+  --waiting-border: #d7dce1;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.dashboard-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+
+.dashboard-header {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.dashboard-header h1 {
+  margin: 0 0 4px;
+  font-size: 1.6rem;
+  color: var(--green-dark);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dashboard-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
+.view-mode-selector {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.view-mode-btn {
+  border: none;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.view-mode-btn + .view-mode-btn {
+  border-left: 1px solid var(--border);
+}
+
+.view-mode-btn:hover:not(.active) {
+  background: var(--green-light);
+}
+
+.view-mode-btn.active {
+  background: var(--green);
+  color: #fff;
+  font-weight: 600;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  align-items: center;
+}
+
+.stats-grid-secondary {
+  margin-top: 16px;
+}
+
+.overview-chart-wrap {
+  margin-top: 16px;
+}
+
+.stat-card {
+  text-align: left;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--green-dark);
+}
+
+.status-message {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.status-error {
+  background: #fdecea;
+  color: #b71c1c;
+  border: 1px solid #f5c6c2;
+}
+
+.status-info {
+  background: var(--green-light);
+  color: var(--green-dark);
+  border: 1px solid #c8e6c9;
+}
+
+.status-waiting {
+  background: var(--waiting-bg);
+  color: var(--waiting-text);
+  border: 1px solid var(--waiting-border);
+}
+
