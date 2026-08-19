@@ -1,25 +1,3 @@
-"""
-test_medical_safety.py — NFR-010 verification.
-
-Proves that medical filtering ALWAYS wins: even when the free-text query
-explicitly asks for something that conflicts with the user's own medical
-condition or allergy, the Expert System's rules still reject the unsafe
-recipes. The query text can never override or bypass medical filtering.
-
-This script only ASSERTS on the existing filter_recipes()/search_recipes()
-output — it adds no filtering logic of its own. Assertions run over the
-COMPLETE expert-safe result set (search_recipes()["expert_result"]
-["safe_recipes"]); search_recipes() only truncates that set to top_n, it
-never adds rows back, so a check on the full set is strictly stronger
-than a check on the returned sample.
-
-Rule thresholds are read live from Expert System/rules/medical_rules.py —
-never guessed.
-
-Run from the project root:
-    python Nlp/test_medical_safety.py
-"""
-
 import sys
 import time
 from pathlib import Path
@@ -41,12 +19,7 @@ from rules.medical_rules import MEDICAL_RULES
 DATA_FILE = EXPERT_SYSTEM_DIR / "data" / "cleaned_recipes.csv"
 
 
-# --------------------------------------------------------------------------- #
-# Assertion helpers (read-only checks on engine output — no filtering here)
-# --------------------------------------------------------------------------- #
-
 def read_rule_limit(condition: str, column: str) -> float:
-    """Actual threshold from medical_rules.py for the given condition/column."""
     op, value = MEDICAL_RULES[condition]["numeric_rules"][column]
     if op not in ("<=", ">="):
         raise ValueError(f"Unsupported rule operator: {op}")
@@ -54,7 +27,6 @@ def read_rule_limit(condition: str, column: str) -> float:
 
 
 def check_sugar_rule(result: dict):
-    """Diabetic: no returned recipe may exceed the diabetes sugar limit."""
     limit = read_rule_limit("diabetes", "SugarContent")
     df = result["expert_result"]["safe_recipes"]
     if df.empty or "SugarContent" not in df.columns:
@@ -64,7 +36,6 @@ def check_sugar_rule(result: dict):
 
 
 def check_peanut_allergy(result: dict):
-    """Peanut-allergic: no returned recipe may mention peanut anywhere."""
     df = result["expert_result"]["safe_recipes"]
     if df.empty:
         return True, df, ""
@@ -85,7 +56,6 @@ def check_peanut_allergy(result: dict):
 
 
 def check_sodium_rule(result: dict):
-    """Hypertension: no returned recipe may exceed the sodium limit."""
     limit = read_rule_limit("hypertension", "SodiumContent")
     df = result["expert_result"]["safe_recipes"]
     if df.empty or "SodiumContent" not in df.columns:
@@ -95,14 +65,9 @@ def check_sodium_rule(result: dict):
 
 
 def check_control_nonempty(result: dict):
-    """Control: a compatible query for the same profile must still return food."""
     ok = result["total_after_expert"] > 0 and result["total_safe"] > 0
     return ok, result["expert_result"]["safe_recipes"], "expected a non-empty result"
 
-
-# --------------------------------------------------------------------------- #
-# Scenario runner
-# --------------------------------------------------------------------------- #
 
 def run_scenario(system: DietaryExpertSystem, name: str, profile: UserProfile,
                  query: str, check, row_fmt) -> bool:
@@ -132,10 +97,6 @@ def run_scenario(system: DietaryExpertSystem, name: str, profile: UserProfile,
     return False
 
 
-# --------------------------------------------------------------------------- #
-# Main
-# --------------------------------------------------------------------------- #
-
 def main() -> None:
     t0 = time.time()
     print(f"Loading recipe database from {DATA_FILE.name} "
@@ -149,7 +110,6 @@ def main() -> None:
     del df
     print(f"Expert System ready in {time.time() - t0:.1f}s")
 
-    # NOTE: thresholds are read live from medical_rules.py, not hard-coded here.
     diabetes_sugar = read_rule_limit("diabetes", "SugarContent")
     hypertension_sodium = read_rule_limit("hypertension", "SodiumContent")
     print(f"\nMedical rules in effect for this run: diabetes SugarContent "

@@ -1,22 +1,3 @@
-"""
-try_profile.py — أداة اختبار يدوية تفاعلية لمسار التوصية الكامل
-================================================================
-تأخذ ملف تعريف مستخدم (عمر/طول/وزن/جنس/حالات/هدف) عبر input()،
-وتمرّره عبر المسار الكامل:
-    DietaryExpertSystem.filter_recipes()  →  rank_with_topsis()
-وتعرض ملخصاً نظيفاً: نسبة الوصفات الآمنة + أفضل 10 بدرجاتها
-(TOPSIS / AI health / Expert / Final) + ملاحظة عن وضع درجة
-الصحة الذكية (حالات المستخدم المدرّبة أم الـ fallback الشامل).
-
-التشغيل — من داخل مجلد TOPSIS/ (وليس من خارجها):
-    python try_profile.py            # تفاعلي
-    python try_profile.py --help     # تعليمات فقط
-
-ملاحظة مهمة على Windows: اِضبط ترميز الإخراج أولاً وإلا تتعطل
-الطباعة عند أي حرف عربي:
-    $env:PYTHONIOENCODING='utf-8'; python try_profile.py
-"""
-
 import html
 import json
 import sys
@@ -142,7 +123,6 @@ def _ask_goal():
 
 
 def ai_mode_note(profile) -> str:
-    """هل دُعمت درجة الصحة الذكية بحالات المستخدم أم بالـ fallback الشامل؟"""
     labels = json.loads(
         (EXPERT_SYSTEM_DIR / "data" / "health_classifier_labels.json")
         .read_text(encoding="utf-8")

@@ -1,41 +1,3 @@
-"""
-health_classifier.py — تدريب مصنّف متعدد الملصقات للحالات الطبية
-==================================================================
-المدخلات:  Expert System/ml/data/labeled_recipes.csv
-           (RecipeId + 9 قيم غذائية + 24 ملصقاً ناعماً)
-
-الأهداف (22 فقط): نستبعد label_lactose_intolerance و label_gluten_intolerance
-           — قيمتان شبه ثابتتين (~99.8% موجبة) بلا إشارة فعلية؛ تبقى
-           معالجة هاتين الحالتين عبر الفلترة النصية في النظام الخبير.
-
-الشبكة (بنمط المكونات الغذائية — Sequential + ReLU + Dropout(0.2)):
-    9 ميزات غذائية -> Linear(64)+ReLU+Dropout -> Linear(32)+ReLU+Dropout
-                    -> Linear(16)+ReLU -> Linear(22)  (logits خام)
-
-    معيار الخسارة: BCEWithLogitsLoss (سوفت ماكس الداخل: sigmoid) مع
-    pos_weight لكل حالة = n_negative / n_positive (من مجموعة التدريب،
-    عند عتبة 0.5، بسقف 10 لتفادي عدم الاستقرار).
-
-    الأهداف المستخدمة هي الملصقات الناعمة نفسها (∈ {0} ∪ [0.5, 1.0])
-    — BCE تدعم أهدافاً عشرية في [0,1] (تفسير soft-label) فتحتفظ بإشارة
-    جودة التقييم التي بنيناها في build_labels.py.
-
-التقسيم 70/15/15:
-    الطبقات الحقيقية هنا متعددة الملصقات (22 حالة) — لا توجد دالة
-    stratification متعددة الملصقات في sklearn. نستخدم وكيلاً (proxy):
-    تقسيم طبقية على label_diabetes المُثنّى (>= 0.5) — الحالة الطبية
-    الأكثر تمثيلاً للمخاطر والأكثر حرصاً في بياناتنا، فهي بديل عملي
-    يضمن بقاء الحالات النادرة موزّعة بتوازن عبر الأقسام الثلاثة.
-    نتحقق لاحقاً بمطبوعة توازن كل حالة عبر الأقسام.
-
-التطبيع: StandardScaler مُلاءَم على التدريب فقط، محفوظ بـ joblib إلى
-    Expert System/data/health_scaler.pkl لاستخدامه في الاستدلال.
-
-المخرجات:
-    Expert System/data/health_classifier.pt     — أفضل أوزان (early stopping)
-    Expert System/data/health_classifier_labels.json — المفاتيح الـ 22 بنفس ترتيب المخرجات
-"""
-
 import json
 import time
 from pathlib import Path
@@ -48,7 +10,7 @@ import torch.nn as nn
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-BASE_DIR = Path(__file__).resolve().parents[2]              # Expert System/
+BASE_DIR = Path(__file__).resolve().parents[2]           
 LABELED_PATH = BASE_DIR / "ml" / "data" / "labeled_recipes.csv"
 SCALER_PATH = BASE_DIR / "data" / "health_scaler.pkl"
 MODEL_PATH = BASE_DIR / "data" / "health_classifier.pt"
@@ -60,7 +22,6 @@ NUTRITION_COLS = [
     "CholesterolContent", "FiberContent",
 ]
 
-# ملصقات مستبعدة من التدريب — شبه ثابتة، تبقى ضمن الفلترة النصية للنظام الخبير
 EXCLUDED_LABELS = {"label_lactose_intolerance", "label_gluten_intolerance"}
 
 INPUT_DIM = 9
@@ -75,7 +36,6 @@ POS_WEIGHT_CAP = 10.0
 
 
 class HealthClassifier(nn.Module):
-    """شبكة تغذية أمامية متعددة الملصقات (MLP بسيط)."""
 
     def __init__(self, input_dim: int = INPUT_DIM, num_conditions: int = NUM_CONDITIONS):
         super().__init__()
@@ -92,7 +52,7 @@ class HealthClassifier(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.network(x)      # logits خام — sigmoid داخل BCEWithLogitsLoss
+        return self.network(x)     
 
 
 def set_seed(seed: int = SEED):
@@ -116,14 +76,6 @@ def load_data():
 
 
 def train_val_test_split(X, Y):
-    """تقسيم 70/15/15 مع stratification تقريبي على label_diabetes المُثنّى.
-
-    حجّة الوكيل (proxy): الحالات 22 متعددة الملصقات لا تدعمها
-    train_test_split مباشرة؛ اختيار السكري كبُعد طبقية لأنه الحالة
-    الطبية الأكثر تمثيلاً (من حيث انتشارها وسلامتها الغذائية) في
-    بياناتنا، فيضمن بقاء نسبتها موزّعة بالتساوي عبر الأقسام. باقي
-    الحالات تُتحقّق توازنها بالمطبوعة اللاحقة.
-    """
     diabetes_bin = (Y["label_diabetes"] >= 0.5).astype(int).values
     idx = np.arange(len(X))
 
@@ -140,7 +92,6 @@ def train_val_test_split(X, Y):
 
 
 def compute_pos_weight(y_train: np.ndarray, cap: float = POS_WEIGHT_CAP) -> torch.Tensor:
-    """n_negative / n_positive لكل حالة من مجموعة التدريب (عتبة 0.5) بسقف cap."""
     n_pos = (y_train >= 0.5).sum(axis=0).astype(np.float64)
     n_neg = y_train.shape[0] - n_pos
     ratios = np.where(n_pos > 0, n_neg / np.maximum(n_pos, 1), cap)
@@ -159,7 +110,6 @@ def make_loader(X: np.ndarray, Y: np.ndarray, batch_size: int, shuffle: bool):
 
 def run_training(model, X_train, y_train, X_val, y_val,
                  max_epochs=MAX_EPOCHS, patience=PATIENCE):
-    """تدريب مع early stopping على خسارة التحقق؛ يعيد أفضل الأوزان والتاريخ."""
     pos_weight = compute_pos_weight(y_train)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -211,7 +161,6 @@ def run_training(model, X_train, y_train, X_val, y_val,
 
 
 def print_split_balance(X, Y, train_idx, val_idx, test_idx, label_cols):
-    """تحقّق توازن الحالات عبر الأقسام (نسب الموجب عند عتبة 0.5)."""
     splits = {"train": train_idx, "val": val_idx, "test": test_idx}
     print("\nClass balance (positive % @0.5) per split:")
     print(f"  {'condition':<28} {'train':>7} {'val':>7} {'test':>7}")
@@ -232,7 +181,6 @@ def main():
     train_idx, val_idx, test_idx = train_val_test_split(X, Y)
     print(f"Split: train {len(train_idx):,} | val {len(val_idx):,} | test {len(test_idx):,}")
 
-    # scaler على التدريب فقط
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X.iloc[train_idx])
     X_val = scaler.transform(X.iloc[val_idx])
@@ -256,7 +204,6 @@ def main():
     print(f"\nTraining done in {elapsed:.0f}s. "
           f"Best epoch {best_epoch}: train {train_at_best:.4f} | val {best_val:.4f}")
 
-    # حفظ المخرجات — test لا يُستخدم في هذا التمرير (خطوة لاحقة)
     torch.save(model.state_dict(), MODEL_PATH)
     joblib.dump(scaler, SCALER_PATH)
     with open(LABELS_PATH, "w", encoding="utf-8") as f:

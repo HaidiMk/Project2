@@ -1,36 +1,7 @@
-"""
-sanity_check.py — تحقق شامل من تكامل طبقة الصحة الذكية (AI health)
-====================================================================
-يفحص:
-    1. 3 ملفات تعريف (سكري/زيادة عضل/مسنّ) — دون أخطاء
-    2. أعمدة الدرجات _expert_score و _ai_health_score موجودة وبلا NaN
-    3. الترتيب القديم (TOPSIS فقط) مقابل الجديد (0.4*TOPSIS + 0.4*AI
-       + 0.2*expert_normalized) — وأفضل 5 متداخلة جزئياً
-    4. لا عودة لوصفات غير آمنة: الترتيب المدمج يعمل على الوصفات
-       الآمنة فقط حصراً
-    5. درجة الذوق (taste): تشغيل ملف السكري مرتين — بدون نص ذوق
-       (توافق رجعي كامل مع المعادلة السابقة 0.4/0.4/0.2) وبعد نص
-       ذوق ("أحب الثوم وزيت الزيتون والدجاج وأكره المأكولات
-       البحرية") — عمود _taste_score موجود وبلا NaN وداخل [0,1]
-       والترتيب تغيّر؛ وأخيراً نص عشوائي (nonsense) يتحول إلى
-       درجات محايدة 0.5 دون أخطاء.
-    6. انحدار معالجة الكره (dislike): ملف 25 سنة/أنثى بلا حالات
-       وهدف healthy_eating — بنص "chocolate, vanilla, cinnamon,
-       sweet desserts; dislike garlic and ginger" يجب ألا تبقى أي
-       وصفة اسمها يحوي garlic/ginger ضمن أفضل 15 بدرجة ذوق مرتفعة
-       (القديمة 0.758 → الجديدة أقل من 0.5 أو خرجت بالكامل)، وبنص
-       موجب "garlic, ginger, soy sauce, chicken; dislike dairy"
-       تبقى وصفات الثوم/الزنجبيل/الدجاج بدرجات ذوق مرتفعة.
-
-التشغيل (من داخل مجلد TOPSIS):
-    python sanity_check.py
-"""
-
 import re
 import sys
 from pathlib import Path
 
-# ── إضافة مجلد "Expert System" لمسار البحث ──────────────────
 EXPERT_SYSTEM_DIR = Path(__file__).resolve().parent.parent / "Expert System"
 sys.path.insert(0, str(EXPERT_SYSTEM_DIR))
 
@@ -47,7 +18,6 @@ from ml.word2vec import taste_inference
 TASTE_TEXT = "I love garlic, olive oil, and chicken. I dislike seafood."
 NONSENSE_TEXT = "asdkjfhaskdjfh"
 
-# ملف تعريف انحدار الكره — نفس شكل الحالة الواقعية التي أظهرت الخطأ
 DISLIKE_REGRESSION_TEXT = ("chocolate, vanilla, cinnamon, sweet desserts; "
                            "dislike garlic and ginger")
 POSITIVE_REGRESSION_TEXT = "garlic, ginger, soy sauce, chicken; dislike dairy"
@@ -134,14 +104,12 @@ def check_profile(name, profile, system, all_ok):
 
 
 def check_taste(system, all_ok):
-    """تحقق من تكامل درجة الذوق: توافق رجعي + ذوق + نص nonsense."""
     print("\n--- Taste score integration (diabetic profile) ---")
     profile = dict(PROFILES)["diabetic"]
     result = system.filter_recipes(profile)
     safe = result["safe_recipes"]
     print(f"  safe={result['total_safe']}")
 
-    # 1) بدون نص ذوق → توافق رجعي كامل مع 0.4/0.4/0.2
     base = rank_with_topsis(safe, profile.goal)
     has_taste_col = "_taste_score" in base.columns
     print(f"  No-taste run: _taste_score column absent: {not has_taste_col}")
@@ -156,7 +124,6 @@ def check_taste(system, all_ok):
     if not match:
         all_ok = False
 
-    # 2) بنص ذوق حقيقي
     ranked = rank_with_topsis(safe, profile.goal, user_taste_text=TASTE_TEXT)
     missing = [c for c in ("_taste_score", "final_score") if c not in ranked.columns]
     if missing:
@@ -189,7 +156,6 @@ def check_taste(system, all_ok):
     if not changed:
         all_ok = False
 
-    # 3) نص nonsense → درجات محايدة 0.5 دون أخطاء
     nonsense = rank_with_topsis(safe, profile.goal, user_taste_text=NONSENSE_TEXT)
     nt = nonsense["_taste_score"].astype(float)
     all_neutral = bool((nt == 0.5).all())
@@ -206,8 +172,6 @@ def check_taste(system, all_ok):
 
 
 def _old_logic_taste_score(recipe_id, text):
-    """أعد إنتاج درجة الذوق بالمنطق القديم (buggy): كامل النص كجملة
-    واحدة وكل المكونات تُعامل كمحبوبة — للمقارنة قبل/بعد فقط."""
     wv, embeddings = taste_inference._load()
     emb = embeddings.get(recipe_id)
     if emb is None:
@@ -224,7 +188,6 @@ def _old_logic_taste_score(recipe_id, text):
 
 
 def check_taste_concepts(safe, goal, all_ok):
-    """فحوصات المفاهيم + fuzzy (خفيفة): بلا NaN وداخل [0,1] + طباعة أفضل 5."""
     print("\n--- Taste concepts + fuzzy: combined smoke checks "
           "(25yo female, healthy_eating) ---")
     for label, text in [
@@ -251,13 +214,11 @@ def check_taste_concepts(safe, goal, all_ok):
 
 
 def check_taste_regression(system, all_ok):
-    """انحدار معالجة الكره: الوصفات المكروهة يجب ألا تُسجَّل كمحبوبة."""
     print("\n--- Taste regression: dislike parsing (25yo female, healthy_eating) ---")
     result = system.filter_recipes(REGRESSION_PROFILE)
     safe = result["safe_recipes"]
     print(f"  safe={result['total_safe']}")
 
-    # 1) "dislike garlic and ginger" → وصفات garlic/ginger بدرجات منخفضة
     ranked = rank_with_topsis(safe, REGRESSION_PROFILE.goal,
                               user_taste_text=DISLIKE_REGRESSION_TEXT)
     t = ranked["_taste_score"].astype(float)
@@ -293,7 +254,6 @@ def check_taste_regression(system, all_ok):
         if old is not None and not r["_taste_score"] < old:
             all_ok = False
 
-    # 2) انحدار موجب: "garlic, ginger, soy sauce, chicken" → تبقى مرتفعة
     ranked_pos = rank_with_topsis(safe, REGRESSION_PROFILE.goal,
                                   user_taste_text=POSITIVE_REGRESSION_TEXT)
     tp = ranked_pos["_taste_score"].astype(float)

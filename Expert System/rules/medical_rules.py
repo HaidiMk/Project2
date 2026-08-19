@@ -1,26 +1,7 @@
-"""
-medical_rules.py — Smart Dietary Advisor v4.0
-==============================================
-قواعد نظام الخبير الطبية — 24 حالة صحية
-المصادر: ADA 2025, AHA/ACC 2025, NKF/KDIGO 2024, ACG 2023, WHO, ESPEN...
-
-هيكل كل حالة:
-    numeric_rules        → حدود رقمية صارمة (تمنع الوصفة عند التجاوز)
-    warning_rules        → حدود تحذيرية (لا تمنع الوصفة)
-    strict_block         → مكونات ممنوعة كلياً
-    soft_block           → مكونات يُنصح بتجنبها
-    preferred_ingredients→ مكونات تزيد درجة التقييم
-    min_requirements     → حدود دنيا إجبارية
-    max_servings         → حد أقصى للحصص
-    source               → المصدر الطبي
-    note                 → ملاحظة سريرية
-"""
-
 from typing import Dict, Any
 
 MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
 
-    # ── السكري — ADA Standards of Care 2025 ───────────────
     "diabetes": {
         "numeric_rules": {
             "CarbohydrateContent": ("<=", 60),
@@ -55,7 +36,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Carbohydrate Counting Method — 3–4 servings (45–60 g) per main meal",
     },
 
-    # ── ارتفاع ضغط الدم — DASH / NHLBI / WHO ─────────────
     "hypertension": {
         "numeric_rules": {
             "SodiumContent":       ("<=", 600),
@@ -93,7 +73,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "1500 mg sodium/day for hypertension; DASH diet priority",
     },
 
-    # ── أمراض القلب — AHA/ACC Guidelines 2025 ─────────────
     "heart_disease": {
         "numeric_rules": {
             "SodiumContent":       ("<=", 500),
@@ -134,7 +113,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Stricter than hypertension — elevated cardiac event risk",
     },
 
-    # ── الكلى المزمنة — NKF / KDIGO 2024 ──────────────────
     "chronic_kidney_disease": {
         "numeric_rules": {
             "SodiumContent":      ("<=", 500),
@@ -172,7 +150,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Low protein slows CKD progression; restrict K, P, Na",
     },
 
-    # ── السمنة — AHA/ACC/TOS + DGA 2025 ───────────────────
     "obesity": {
         "numeric_rules": {
             "Calories":            ("<=", 400),
@@ -214,7 +191,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "500–750 kcal deficit/day → 0.5–1 kg/week weight loss",
     },
 
-    # ── ارتجاع المريء — ACG Guidelines 2022 ───────────────
     "gerd": {
         "numeric_rules": {
             "Calories":   ("<=", 500),
@@ -252,7 +228,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Small frequent meals; avoid lying down within 3 hours of eating",
     },
 
-    # ── الكوليسترول المرتفع — ACC/AHA 2018 ────────────────
     "high_cholesterol": {
         "numeric_rules": {
             "CholesterolContent":  ("<=", 67),
@@ -292,7 +267,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Soluble fiber reduces LDL; avoid saturated & trans fats",
     },
 
-    # ── هشاشة العظام — NOF + AACE/ACE 2020 ───────────────
     "osteoporosis": {
         "numeric_rules": {
             "Calories": (">=", 300),
@@ -315,7 +289,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Ca 1000–1200 mg/day + Vitamin D 800–1000 IU/day",
     },
 
-    # ── فقر الدم — WHO + ASH ──────────────────────────────
     "anemia": {
         "numeric_rules": {
             "Calories":       (">=", 300),
@@ -347,7 +320,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Vitamin C triples non-heme iron absorption",
     },
 
-    # ── الحمل — ACOG 2021 + WHO Antenatal ─────────────────
     "pregnancy": {
         "numeric_rules": {
             "Calories":       (">=", 400),
@@ -389,7 +361,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         ),
     },
 
-    # ── الأطفال (4–12) — AAP + DGA 2025 ──────────────────
     "children": {
         "numeric_rules": {
             "Calories":      ("<=", 500),
@@ -422,7 +393,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Excess sugar & sodium in childhood predisposes to chronic disease",
     },
 
-    # ── كبار السن (65+) — ESPEN + AGS + DGA 2025 ─────────
     "elderly": {
         "numeric_rules": {
             "ProteinContent": (">=", 20),
@@ -454,7 +424,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Sarcopenia prevention: 1.0–1.2 g protein/kg/day",
     },
 
-    # ── عدم تحمل اللاكتوز — ACG + NIDDK ─────────────────
     "lactose_intolerance": {
         "numeric_rules": {},
         "warning_rules": {},
@@ -482,7 +451,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Hard aged cheese (parmesan, cheddar) may be tolerated in small amounts",
     },
 
-    # ── حساسية الجلوتين / سيلياك — ACG 2023 ──────────────
     "gluten_intolerance": {
         "numeric_rules": {},
         "warning_rules": {},
@@ -514,19 +482,11 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "FDA: gluten-free = < 20 ppm",
     },
 
-    # ── حساسية المكسرات — FARE + ACAAI ───────────────────
     "nut_allergy": {
         "numeric_rules": {},
         "warning_rules": {},
         "strict_block": [
             "peanut", "peanuts", "peanut butter", "peanut oil",
-            # 🛠️ إصلاح: "groundnut" مرادف بريطاني/هندي لـ peanut،
-            # كان مفقوداً منذ دمج القوائم فكانت وصفات حقيقية تحتوي
-            # "groundnuts" تتسرب (RecipeId 9878، 521164). النمط يضيف
-            # "s?" تلقائياً فيغطي المفرد والجمع. لم نضف "nutty"/
-            # "peanutty" عمداً — أسماء مثل "Nutty Chocolate Mint Fudge"
-            # مكوّناتها نظيفة، وإضافتها ستُفرط في الحجب (RecipeId
-            # 332170 "nutty rice" غامض وبقي كما هو).
             "groundnut",
             "almond", "almonds", "almond flour", "almond milk",
             "walnut", "walnuts", "pecan", "pecans",
@@ -546,7 +506,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Anaphylaxis risk from trace amounts — carry EpiPen",
     },
 
-    # ── حساسية المأكولات البحرية — FARE + FDA Top 9 ───────
     "seafood_allergy": {
         "numeric_rules": {},
         "warning_rules": {},
@@ -570,7 +529,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Both finfish and shellfish excluded — anaphylaxis risk",
     },
 
-    # ── حساسية البيض — FARE + ACAAI ──────────────────────
     "egg_allergy": {
         "numeric_rules": {},
         "warning_rules": {},
@@ -580,12 +538,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
             "egg powder", "dried egg", "egg solids",
             "albumin", "globulin", "lysozyme", "mayonnaise",
             "meringue", "surimi",
-            # 🛠️ إصلاح: "eggnog" و"eggshell" — فحص قراءة-فقط وجد وصفات
-            # تحتوي "eggnog ice cream" (منتج تجاري فيه بيض) أو
-            # "eggshells" تتسرب لأن \begg\b لا يطابق الصيغ المركّبة
-            # (RecipeId 77596، 77790، 185837، 200057، 262370، 420103،
-            # 90358، 537278). لا يوجد عمود HasEggs في CSV، فالفحص نصي
-            # فقط لهذه الفئة — الحماية هنا أولوية قصوى.
             "eggnog", "eggshell",
         ],
         "soft_block": [],
@@ -598,7 +550,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Common in children; many outgrow by adolescence",
     },
 
-    # ── حساسية السمسم — FDA FASTER Act 2023 (المسبب التاسع رسمياً) ──
     "sesame_allergy": {
         "numeric_rules": {},
         "warning_rules": {},
@@ -617,7 +568,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Effective Jan 1, 2023; hidden often in buns, sauces, hummus",
     },
 
-    # ── النقرس — ACR 2020 ─────────────────────────────────
     "gout": {
         "numeric_rules": {
             "Calories":   ("<=", 500),
@@ -653,7 +603,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "8–12 cups water/day significantly reduces flares",
     },
 
-    # ── القولون العصبي — ACG 2021 + Low-FODMAP ────────────
     "irritable_bowel_syndrome": {
         "numeric_rules": {
             "Calories":   ("<=", 500),
@@ -692,7 +641,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Low-FODMAP effective in 75% of cases; work with a dietitian",
     },
 
-    # ── التهاب الكبد — AASLD + EASL 2023 ─────────────────
     "hepatitis": {
         "numeric_rules": {
             "Calories":            (">=", 350),
@@ -735,7 +683,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Alcohol absolutely forbidden even in mild hepatitis",
     },
 
-    # ── الربو — GINA 2024 + ERS/ATS ──────────────────────
     "asthma": {
         "numeric_rules": {
             "Calories":            ("<=", 600),
@@ -777,7 +724,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Sulfites in preserved foods are a documented asthma trigger — check labels",
     },
 
-    # ── قصور الغدة الدرقية — ATA 2014 + ETA 2023 ─────────
     "hypothyroidism": {
         "numeric_rules": {
             "Calories":     ("<=", 500),
@@ -819,7 +765,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Take Levothyroxine on empty stomach; wait 30–60 min before eating.",
     },
 
-    # ── فرط نشاط الغدة الدرقية — ATA/AACE 2016 ──────────
     "hyperthyroidism": {
         "numeric_rules": {
             "Calories":       (">=", 450),
@@ -860,7 +805,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Hyperthyroidism is the mirror image of hypothyroidism — goitrogens are HELPFUL here",
     },
 
-    # ── داء كرون — ECCO 2023 + ACG 2021 ──────────────────
     "crohns_disease": {
         "numeric_rules": {
             "FatContent":   ("<=", 15),
@@ -907,7 +851,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "Rules differ between flare (stricter) and remission. Monitor Fe, B12, Zn.",
     },
 
-    # ── الإمساك المزمن — ACG 2021 + WGO ──────────────────
     "constipation": {
         "numeric_rules": {
             "FiberContent": (">=", 7),
@@ -939,7 +882,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "8 cups water/day essential alongside fiber",
     },
 
-    # ── نقص الوزن — ASPEN + AND + DGA 2025 ───────────────
     "underweight": {
         "numeric_rules": {
             "Calories":       (">=", 550),
@@ -977,7 +919,6 @@ MEDICAL_RULES: Dict[str, Dict[str, Any]] = {
         "note":   "+500 kcal/day + resistance training for lean mass gain",
     },
 
-    # ── تكيس المبايض — Endocrine Society 2023 ─────────────
     "pcos": {
         "numeric_rules": {
             "CarbohydrateContent": ("<=", 45),

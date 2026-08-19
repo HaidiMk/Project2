@@ -1,34 +1,9 @@
-"""
-test_robustness_all.py — false-positive regression suite for all four
-semantic categories (condition, meal_type, diet_preference,
-main_ingredient) plus the required sample queries.
-
-Groups:
-  G1 condition true positives     — genuine condition mentions must be found.
-  G2 condition false positives    — generic words / misleading phrases must
-                                    NEVER claim a condition (in particular,
-                                    "something for my blood sugar problem"
-                                    must not become "anemia").
-  G3 meal_type                    — margin gate: genuine meals found,
-                                    ambiguous words ("snack", "quick meal")
-                                    rejected.
-  G4 diet_preference              — 0.70 threshold: true preferences found,
-                                    bare generic words rejected.
-  G5 main_ingredient regression   — the original 20/20 suite's logic,
-                                    spot-checked here.
-  G6 required sample queries      — exact-field regression of the three
-                                    canonical parse examples.
-
-Run from the project root:
-    python Nlp/test_robustness_all.py
-"""
-
 try:
     from Nlp.query_parser import parse_query
-except ModuleNotFoundError:  # executed standalone with Nlp/ on sys.path
+except ModuleNotFoundError: 
     from query_parser import parse_query
 
-G1 = [  # (query, expected condition)
+G1 = [ 
     ("i have diabetes", "diabetes"),
     ("diabetic meal plan", "diabetes"),
     ("food for high blood pressure", "hypertension"),
@@ -45,7 +20,7 @@ G1 = [  # (query, expected condition)
     ("high blood sugar", "diabetes"),
 ]
 
-G2 = [  # (query, forbidden condition) — must NOT claim the forbidden one
+G2 = [  
     ("something for my blood sugar problem", "anemia"),
     ("i have a blood problem", "anemia"),
     ("heart healthy meal", "heart_disease"),
@@ -65,7 +40,7 @@ G2 = [  # (query, forbidden condition) — must NOT claim the forbidden one
     ("weight issue", "obesity"),
 ]
 
-G3 = [  # (query, expected meal_type or None)
+G3 = [  
     ("breakfast", "breakfast"),
     ("morning meal", "breakfast"),
     ("lunch", "lunch"),
@@ -77,7 +52,7 @@ G3 = [  # (query, expected meal_type or None)
     ("brunch", None),
 ]
 
-G4 = [  # (query, expected diet_preference or None)
+G4 = [  
     ("vegetarian", "vegetarian"),
     ("vegan", "vegan"),
     ("chicken lover", "chicken_lover"),
@@ -87,7 +62,7 @@ G4 = [  # (query, expected diet_preference or None)
     ("chicken", None),
 ]
 
-G5 = [  # (query, expected main_ingredient or None)
+G5 = [  
     ("chicken lunch", "chicken"),
     ("salmon dinner", "salmon"),
     ("tofu stir fry", "tofu"),
@@ -96,7 +71,7 @@ G5 = [  # (query, expected main_ingredient or None)
     ("something light for dinner", None),
 ]
 
-G6 = [  # (query, {field: expected})
+G6 = [  
     ("I want low sugar dinner for diabetic", {
         "condition": "diabetes", "meal_type": "dinner",
         "sugar_max": 15, "main_ingredient": None}),

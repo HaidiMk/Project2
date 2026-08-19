@@ -1,13 +1,8 @@
-"""
-Shared JSON-serialization helpers for recipes app views.
-"""
-
 import numpy as np
 import pandas as pd
 
 
 def json_safe(value):
-    """Convert a numpy/pandas scalar to a native Python type; NaN/None -> None."""
     if value is None:
         return None
     try:

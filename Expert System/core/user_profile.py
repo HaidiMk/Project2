@@ -16,13 +16,11 @@ ACTIVITY_FACTORS = {
 
 
 def _pick(cond, when_true, when_false):
-    """بديل التعبير الثلاثي."""
     return {True: when_true, False: when_false}[bool(cond)]
 
 
 @dataclass
 class UserProfile:
-    """الملف الشخصي للمستخدم — يحتوي على جميع المعطيات الصحية."""
 
     age:            int
     height:         float                      
@@ -43,7 +41,6 @@ class UserProfile:
 
     @property
     def bmi_category(self) -> str:
-        """تصنيف الوزن عبر numpy.select بدل سلسلة if/elif."""
         b = self.bmi
         conditions = [b < 18.5, b < 25.0, b < 30.0, b < 35.0, b < 40.0]
         choices = [
@@ -60,14 +57,12 @@ class UserProfile:
 
     @property
     def life_stage(self) -> str:
-        """الفئة العمرية عبر numpy.select بدل سلسلة if."""
         a = self.age
         conditions = [a <= 12, a <= 17, a >= 65]
         choices = ["child", "teen", "elderly"]
         return str(np.select(conditions, choices, default="adult"))
 
     def bmr(self) -> float:
-        """معادلة Mifflin-St Jeor — الجزء الثابت بالجنس عبر فهرسة قاموس."""
         common = 10 * self.weight + 6.25 * self.height - 5 * self.age
         gender_offset = {"male": 5}.get(self.gender, -161)
         return common + gender_offset

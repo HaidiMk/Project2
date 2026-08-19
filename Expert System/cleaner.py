@@ -1,26 +1,9 @@
-"""
-cleaner.py — Smart Dietary Advisor
-===================================
-FIXED v3 (all issues from evaluation):
-  - FIX #1: CholesterolContent outlier capping (was ignored in v2)
-  - FIX #2: SugarContent outlier capping (was ignored in v2)
-  - FIX #3: TimeCategory — correct ISO 8601 PT parser (hours, minutes, days)
-  - FIX #4: MealType/MainCategory sync — MealType now derived from MainCategory
-             to eliminate 130K-row mismatch
-  - All previous v2 fixes retained:
-      FiberContent outlier removal, smart normalization, DietType elif chain,
-      Breakfast exclusion from MainDish, enhanced MainCategory, all-categories filter
-"""
-
 import pandas as pd
 import numpy as np
 import re
 import json
 
-# ─────────────────────────────────────────
-# 1. Load dataset
-# ─────────────────────────────────────────
-print("📥 Loading dataset...")
+print(" Loading dataset...")
 
 df = pd.read_csv(
     "data/recipes.csv",
@@ -30,9 +13,6 @@ df = pd.read_csv(
 
 print(f"   Original recipes: {len(df):,}")
 
-# ─────────────────────────────────────────
-# 2. Nutrition columns
-# ─────────────────────────────────────────
 NUTRITION_COLS = [
     "Calories",
     "FatContent",
@@ -45,19 +25,13 @@ NUTRITION_COLS = [
     "ProteinContent",
 ]
 
-# ─────────────────────────────────────────
-# 3. Convert numeric
-# ─────────────────────────────────────────
-print("🔢 Converting nutrition values to numeric...")
+print(" Converting nutrition values to numeric...")
 
 for col in NUTRITION_COLS:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# ─────────────────────────────────────────
-# 4. FIX v2: FiberContent outlier removal
-# ─────────────────────────────────────────
-print("🔧 Fixing FiberContent (outlier removal)...")
+print(" Fixing FiberContent (outlier removal)...")
 
 if "FiberContent" in df.columns:
     df.loc[df["FiberContent"] > 50, "FiberContent"] = np.nan
@@ -65,13 +39,7 @@ if "FiberContent" in df.columns:
     df["FiberContent"] = df["FiberContent"].fillna(median_fiber)
     print(f"   Fiber fixed → mean: {df['FiberContent'].mean():.2f}, max: {df['FiberContent'].max():.2f}")
 
-# ─────────────────────────────────────────
-# 5. FIX #1 (NEW): CholesterolContent outlier capping
-#    Physiological max per meal is ~600 mg (organ meats).
-#    Values above 600 are almost certainly batch-level values,
-#    not per-serving values.
-# ─────────────────────────────────────────
-print("🔧 FIX #1: Capping CholesterolContent outliers...")
+print(" FIX #1: Capping CholesterolContent outliers...")
 
 if "CholesterolContent" in df.columns:
     outlier_count = (df["CholesterolContent"] > 600).sum()
@@ -81,13 +49,7 @@ if "CholesterolContent" in df.columns:
     print(f"   Capped {outlier_count:,} rows > 600 mg → median fill {median_chol:.1f}")
     print(f"   Cholesterol fixed → mean: {df['CholesterolContent'].mean():.1f}, max: {df['CholesterolContent'].max():.1f}")
 
-# ─────────────────────────────────────────
-# 6. FIX #2 (NEW): SugarContent outlier capping
-#    Values > 120 g/serving are impossible for normal food items —
-#    these are batch-level values (jams, frostings, jellies) where
-#    normalization by servings failed.
-# ─────────────────────────────────────────
-print("🔧 FIX #2: Capping SugarContent outliers...")
+print(" FIX #2: Capping SugarContent outliers...")
 
 if "SugarContent" in df.columns:
     outlier_count = (df["SugarContent"] > 120).sum()
@@ -97,10 +59,7 @@ if "SugarContent" in df.columns:
     print(f"   Capped {outlier_count:,} rows > 120 g → median fill {median_sugar:.1f}")
     print(f"   Sugar fixed → mean: {df['SugarContent'].mean():.1f}, max: {df['SugarContent'].max():.1f}")
 
-# ─────────────────────────────────────────
-# 7. Remove extreme outliers (general)
-# ─────────────────────────────────────────
-print("🚫 Removing outliers...")
+print(" Removing outliers...")
 
 before = len(df)
 
@@ -116,10 +75,7 @@ for col in NUTRITION_COLS:
 after = len(df)
 print(f"   Removed: {before - after:,} recipes → remaining: {after:,}")
 
-# ─────────────────────────────────────────
-# 8. Smart normalization (only if needed)
-# ─────────────────────────────────────────
-print("🍽️ Smart normalization to PER SERVING values...")
+print(" Smart normalization to PER SERVING values...")
 
 servings_col = None
 for col in ["RecipeServings", "Servings", "Yield", "NumberOfServings"]:
@@ -131,7 +87,7 @@ if servings_col:
     print(f"   Using servings column: '{servings_col}'")
     df["Servings"] = pd.to_numeric(df[servings_col], errors="coerce")
 else:
-    print("   ⚠️ No servings column found - estimating from calories")
+    print("   No servings column found - estimating from calories")
     df["Servings"] = (df["Calories"] / 500).round().clip(1, 12)
 
 df["Servings"] = df["Servings"].fillna(4).replace(0, 4)
@@ -147,12 +103,9 @@ for col in NUTRITION_COLS:
             df.loc[df["NeedsNormalization"], col] / df.loc[df["NeedsNormalization"], "Servings"]
         ).round(2)
 
-print(f"   ✅ Nutrition values normalized intelligently")
+print(f"   Nutrition values normalized intelligently")
 
-# ─────────────────────────────────────────
-# 9. Create validation flags
-# ─────────────────────────────────────────
-print("🏷️ Creating validation flags...")
+print(" Creating validation flags...")
 
 fiber_threshold = 50
 
@@ -167,9 +120,6 @@ df["IsValidServing"] = (
 suspicious = (~df["IsValidServing"]).sum()
 print(f"   Flagged {suspicious:,} recipes as suspicious serving size")
 
-# ─────────────────────────────────────────
-# 10. Ingredients parsing
-# ─────────────────────────────────────────
 print("🧹 Cleaning ingredients...")
 
 def parse_r_list(raw):
@@ -195,10 +145,7 @@ if "Keywords" in df.columns:
 else:
     df["KeywordsList"] = [[] for _ in range(len(df))]
 
-# ─────────────────────────────────────────
-# 11. Classify meal types
-# ─────────────────────────────────────────
-print("🍽️ Classifying meal types...")
+print(" Classifying meal types...")
 
 NOT_MAIN_DISH = {
     "dessert", "cake", "cookie", "pie", "ice cream", "pudding", "custard",
@@ -267,10 +214,7 @@ print(f"   Drink:     {(df['MealType'] == 'Drink').sum():,}")
 print(f"   Breakfast: {(df['MealType'] == 'Breakfast').sum():,}")
 print(f"   Other:     {(df['MealType'] == 'Other').sum():,}")
 
-# ─────────────────────────────────────────
-# 12. Images
-# ─────────────────────────────────────────
-print("🖼️ Cleaning images...")
+print(" Cleaning images...")
 
 def extract_image_urls(raw):
     if pd.isna(raw) or str(raw).strip() in ("character(0)", ""):
@@ -286,17 +230,11 @@ df["ImageUrl"]    = all_images.apply(lambda x: x[0] if x else "")
 df["ImagesCount"] = all_images.apply(len)
 df["ImagesJson"]  = all_images.apply(lambda x: json.dumps(x) if x else "[]")
 
-# ─────────────────────────────────────────
-# 13. Clean text
-# ─────────────────────────────────────────
 for col in ["Name", "AuthorName", "Description", "RecipeCategory"]:
     if col in df.columns:
         df[col] = df[col].fillna("").astype(str).str.strip()
 
-# ─────────────────────────────────────────
-# 14. MainCategory (Enhanced from v2)
-# ─────────────────────────────────────────
-print("🧠 Creating MainCategory...")
+print(" Creating MainCategory...")
 
 def map_main_category(row):
     cat         = str(row.get("RecipeCategory", "")).lower()
@@ -346,14 +284,7 @@ def map_main_category(row):
 
 df["MainCategory"] = df.apply(map_main_category, axis=1)
 
-# ─────────────────────────────────────────
-# FIX #4 (NEW): Sync MealType with MainCategory
-#    The two classifiers were computed independently, causing
-#    130K rows with MealType="Other" but MainCategory="Main Dish".
-#    We derive a unified MealType from MainCategory as the single
-#    source of truth, keeping the original for reference.
-# ─────────────────────────────────────────
-print("🔧 FIX #4: Syncing MealType with MainCategory (eliminating mismatch)...")
+print(" FIX #4: Syncing MealType with MainCategory (eliminating mismatch)...")
 
 df["MealType_original"] = df["MealType"]
 
@@ -375,10 +306,7 @@ mismatch_remaining = (
 ).sum()
 print(f"   MealType/MainCategory mismatch after sync: {mismatch_remaining} (was ~130K)")
 
-# ─────────────────────────────────────────
-# 15. Diet Type
-# ─────────────────────────────────────────
-print("🥗 Creating DietType...")
+print(" Creating DietType...")
 
 MEAT    = {"chicken", "beef", "pork", "lamb", "turkey", "meat", "bacon", "ham", "sausage"}
 SEAFOOD = {"fish", "salmon", "tuna", "shrimp", "crab", "seafood", "prawn", "lobster"}
@@ -398,10 +326,7 @@ def classify_diet(ingredients):
 
 df["DietType"] = df["IngredientsList"].apply(classify_diet)
 
-# ─────────────────────────────────────────
-# 16. Allergy flags
-# ─────────────────────────────────────────
-print("⚕️ Calculating allergy flags...")
+print(" Calculating allergy flags...")
 
 LACTOSE          = {"milk", "cheese", "cream", "butter", "yogurt", "dairy", "whey", "casein"}
 GLUTEN           = {"wheat", "barley", "oat", "rye", "flour", "bread", "pasta", "noodle", "spaghetti"}
@@ -418,10 +343,7 @@ df["HasNuts"]    = df["IngredientsList"].apply(lambda x: has_trigger(x, NUTS))
 df["HasSoy"]     = df["IngredientsList"].apply(lambda x: has_trigger(x, SOY))
 df["HasSeafood"] = df["IngredientsList"].apply(lambda x: has_trigger(x, SEAFOOD_ALLERGEN))
 
-# ─────────────────────────────────────────
-# 17. HealthScore
-# ─────────────────────────────────────────
-print("⚡ Creating HealthScore...")
+print(" Creating HealthScore...")
 
 def health_score(row):
     score = 70
@@ -458,32 +380,14 @@ def risk_level(score):
 
 df["RiskLevel"] = df["HealthScore"].apply(risk_level)
 
-# ─────────────────────────────────────────
-# 18. Difficulty Score
-# ─────────────────────────────────────────
 df["DifficultyScore"] = (
     df["IngredientsList"].apply(len) * 0.3 +
     df["InstructionsList"].apply(len) * 0.3
 ).clip(1, 10).round(1)
 
-# ─────────────────────────────────────────
-# 19. FIX #3 (NEW): TimeCategory — correct ISO 8601 PT parser
-#    Original parser read "PT168H15M" but only extracted "168"
-#    as a bare number without converting hours → minutes,
-#    causing 281K recipes to be classified as "Quick".
-#
-#    ISO 8601 duration format: PT[nH][nM] or P[nD]T[nH][nM]
-#    Examples: PT45M → 45 min, PT1H30M → 90 min,
-#              PT24H → 1440 min, P1DT0H → 1440 min
-# ─────────────────────────────────────────
-print("⏱️ FIX #3: Parsing TimeCategory with correct ISO 8601 parser...")
+print(" FIX #3: Parsing TimeCategory with correct ISO 8601 parser...")
 
 def parse_iso8601_duration_minutes(s):
-    """
-    Converts ISO 8601 duration string to total minutes.
-    Handles: PT45M, PT1H30M, PT24H, P1DT2H30M, P7D, etc.
-    Returns None if unparseable.
-    """
     if not s or pd.isna(s):
         return None
     s = str(s).strip().upper()
@@ -492,20 +396,16 @@ def parse_iso8601_duration_minutes(s):
 
     total_minutes = 0
 
-    # Days (before T)
     day_match = re.search(r'(\d+)D', s)
     if day_match:
         total_minutes += int(day_match.group(1)) * 1440
 
-    # Hours
     hour_match = re.search(r'(\d+)H', s)
     if hour_match:
         total_minutes += int(hour_match.group(1)) * 60
 
-    # Minutes
     min_match = re.search(r'(\d+)M', s)
     if min_match:
-        # Make sure we're not matching months (before T)
         t_pos = s.find('T')
         m_pos = s.find('M', t_pos if t_pos >= 0 else 0)
         if m_pos >= 0:
@@ -514,7 +414,6 @@ def parse_iso8601_duration_minutes(s):
     return total_minutes if total_minutes > 0 else None
 
 def time_category(row):
-    # Try TotalTime first, fall back to CookTime + PrepTime sum
     for col in ["TotalTime", "CookTime", "PrepTime"]:
         val = row.get(col)
         if pd.notna(val) and str(val).strip() not in ("", "PT", "P"):
@@ -530,20 +429,14 @@ df["TimeCategory"] = df.apply(time_category, axis=1)
 print(f"   TimeCategory distribution:")
 print(df["TimeCategory"].value_counts().to_string())
 
-# ─────────────────────────────────────────
-# 20. Remove duplicates
-# ─────────────────────────────────────────
-print("🧹 Removing duplicates...")
+print(" Removing duplicates...")
 
 before = len(df)
 df     = df.drop_duplicates(subset=["Name"])
 after  = len(df)
 print(f"   Removed {before - after:,} duplicates")
 
-# ─────────────────────────────────────────
-# 21. Filter ALL valid recipes (all categories)
-# ─────────────────────────────────────────
-print("🎯 Filtering for expert system ready recipes (ALL categories)...")
+print(" Filtering for expert system ready recipes (ALL categories)...")
 
 df_expert_ready = df[
     df["IsValidServing"] &
@@ -552,12 +445,9 @@ df_expert_ready = df[
 ].copy()
 
 print(f"   Expert system ready recipes: {len(df_expert_ready):,}")
-print("\n📊 By category:")
+print("\n By category:")
 print(df_expert_ready["MainCategory"].value_counts())
 
-# ─────────────────────────────────────────
-# 22. Final columns
-# ─────────────────────────────────────────
 NUTRITION_COLS_FINAL = [
     "Calories",
     "FatContent",
@@ -591,49 +481,43 @@ df_clean = df_clean.rename(columns={
     "ReviewCount":      "NumReviews"
 })
 
-# ─────────────────────────────────────────
-# 23. Save
-# ─────────────────────────────────────────
-print("💾 Saving files...")
+print(" Saving files...")
 
 df_clean.to_csv("data/cleaned_recipes.csv", index=False)
 df.to_csv("data/cleaned_recipes_full.csv", index=False)
 
-print("   ✅ data/cleaned_recipes.csv     (all categories — expert system ready)")
-print("   ✅ data/cleaned_recipes_full.csv (raw full dataset)")
+print("    data/cleaned_recipes.csv     (all categories — expert system ready)")
+print("    data/cleaned_recipes_full.csv (raw full dataset)")
 
-# ─────────────────────────────────────────
-# 24. Summary
-# ─────────────────────────────────────────
 print("\n" + "═" * 60)
-print("✅ CLEANING COMPLETED (v3)")
+print(" CLEANING COMPLETED (v3)")
 print("═" * 60)
 print(f"Expert system ready recipes: {len(df_clean):,}")
 print(f"Columns: {len(df_clean.columns)}")
 
-print("\n📋 Category breakdown:")
+print("\n Category breakdown:")
 print(df_clean["MainCategory"].value_counts())
 
-print("\n🥗 DietType distribution:")
+print("\n DietType distribution:")
 print(df_clean["DietType"].value_counts())
 
-print("\n⏱️ TimeCategory distribution (fixed):")
+print("\n TimeCategory distribution (fixed):")
 print(df_clean["TimeCategory"].value_counts())
 
-print("\n📊 Nutrition per serving statistics:")
+print("\n Nutrition per serving statistics:")
 print("-" * 50)
 for col in ["Calories", "ProteinContent", "FiberContent", "SodiumContent", "SugarContent", "CholesterolContent"]:
     if col in df_clean.columns:
         print(f"{col:<22}: {df_clean[col].mean():.1f} ± {df_clean[col].std():.1f}  (max: {df_clean[col].max():.1f})")
 
-print("\n🔧 Fixes applied in v3:")
-print("  ✅ FIX #1: CholesterolContent capped at 600 mg (was max 2,544)")
-print("  ✅ FIX #2: SugarContent capped at 120 g (was max 253)")
-print("  ✅ FIX #3: TimeCategory uses correct ISO 8601 hour/minute parser")
-print("  ✅ FIX #4: MealType now derived from MainCategory (0 mismatch rows)")
+print("\n Fixes applied in v3:")
+print("   FIX #1: CholesterolContent capped at 600 mg (was max 2,544)")
+print("   FIX #2: SugarContent capped at 120 g (was max 253)")
+print("   FIX #3: TimeCategory uses correct ISO 8601 hour/minute parser")
+print("   FIX #4: MealType now derived from MainCategory (0 mismatch rows)")
 
 sample = df_clean.sample(1).iloc[0]
-print("\n🍽️ SAMPLE RECIPE")
+print("\n SAMPLE RECIPE")
 for col in ["Name", "MealType", "MainCategory", "DietType", "Calories",
             "ProteinContent", "HealthScore", "Rating", "TimeCategory"]:
     if col in sample.index:

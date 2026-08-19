@@ -1,19 +1,3 @@
-"""
-test_pipeline.py — end-to-end demo: free-text query -> Expert System results.
-
-Builds the REAL Expert System on the project's real recipe database and
-routes free-text queries through Nlp/pipeline.search_recipes().
-
-Run from the project root:
-    python Nlp/test_pipeline.py
-
-Note: loading cleaned_recipes.csv (~520 MB) and running filter_recipes()
-over the full dataset is deliberately NOT fast; correctness matters more
-than speed here. The engine ranks by expert score + AI health score
-(NCF ranking was removed; the engine reports it via the ai_health_scoring
-flag in the result).
-"""
-
 import sys
 import time
 from pathlib import Path
@@ -64,11 +48,9 @@ def main() -> None:
     print("\nConstructing DietaryExpertSystem...")
     t0 = time.time()
     system = DietaryExpertSystem(df)
-    del df  # free the caller's copy; the engine keeps its own
+    del df 
     print(f"Expert System ready in {time.time() - t0:.1f}s")
 
-    # Dummy adult base profile — body data comes from here, never from the
-    # query text.
     base_profile = UserProfile(
         age=32, height=170.0, weight=70.0, gender="male",
         activity_level="light", goal="weight_loss",

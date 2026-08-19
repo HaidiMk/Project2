@@ -1,5 +1,3 @@
-
-
 from typing import Dict, Any
 from rules.medical_rules import MEDICAL_RULES
 
@@ -105,7 +103,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         "conflict_warning": None,
     },
 
-    # ── ثلاثية السكري + ضغط + سمنة ───────────────────────
     ("diabetes", "hypertension", "obesity"): {
         "SugarContent":        ("<=", 8),
         "CarbohydrateContent": ("<=", 40),
@@ -120,10 +117,7 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
             "Strongly recommend consulting a registered dietitian."
         ),
     },
-
-   
-    #  الحساسيات
-    
+ 
 
     ("gluten_intolerance", "lactose_intolerance"): {
         "blocked_ingredients": list(set(
@@ -157,9 +151,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    # مرض + حساسية
-   
 
     ("diabetes", "lactose_intolerance"): {
         "SugarContent":        ("<=", 15),
@@ -199,9 +190,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
             "Triple condition. Safe core: fish + vegetables + dairy-free whole grains."
         ),
     },
-
-    
-    #  الحمل
     
     ("diabetes", "pregnancy"): {
         "SugarContent":        ("<=", 10),
@@ -259,9 +247,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    #  السمنة
-    
 
     ("high_cholesterol", "obesity"): {
         "Calories":            ("<=", 400),
@@ -315,9 +300,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    #  الكلى
-    
 
     ("chronic_kidney_disease", "heart_disease"): {
         "SodiumContent":       ("<=", 400),
@@ -386,8 +368,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
     },
 
     
-    #  النقرس
-    
     ("diabetes", "gout"): {
         "SugarContent":        ("<=", 8),
         "CarbohydrateContent": ("<=", 50),
@@ -440,9 +420,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    # تركيبات القولون العصبي IBS
-    
 
     ("irritable_bowel_syndrome", "lactose_intolerance"): {
         "FatContent":          ("<=", 12),
@@ -501,9 +478,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    #  الكبد
-    
     ("diabetes", "hepatitis"): {
         "SugarContent":        ("<=", 10),
         "CarbohydrateContent": ("<=", 50),
@@ -558,9 +532,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    # تركيبات الغدة الدرقية
-    
 
     ("hypothyroidism", "obesity"): {
         "Calories":            ("<=", 450),
@@ -644,8 +615,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-   
-    #  داء كرون
     
     ("anemia", "crohns_disease"): {
         "Calories":            (">=", 350),
@@ -694,9 +663,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    # تركيبات الإمساك
-    
 
     ("constipation", "hypothyroidism"): {
         "FiberContent":        (">=", 7),
@@ -709,9 +675,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    # تركيبات نقص الوزن
-    
 
     ("diabetes", "underweight"): {
         "Calories":            (">=", 450),
@@ -739,9 +702,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    # الثلاثية القلبية
-    
 
     ("diabetes", "heart_disease", "hypertension"): {
         "SugarContent":        ("<=", 8),
@@ -760,8 +720,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
         ),
     },
 
-    
-    # تركيبات كبار السن
     
     ("diabetes", "elderly"): {
         "SugarContent":        ("<=", 12),
@@ -807,8 +765,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
     },
 
     
-    # تركيبات الربو
-    
     ("asthma", "egg_allergy"): {
         "SaturatedFatContent": ("<=", 5),
         "SodiumContent":       ("<=", 550),
@@ -853,10 +809,6 @@ COMBINED_RULES: Dict[tuple, Dict[str, Any]] = {
             "Anti-inflammatory diet (Omega-3, vegetables, fiber) benefits both."
         ),
     },
-
-    
-    # سيلياك + هشاشة العظام
-   
 
     ("gluten_intolerance", "osteoporosis"): {
         "Calories":            (">=", 300),

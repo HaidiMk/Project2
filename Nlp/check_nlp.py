@@ -7,7 +7,6 @@ print("تم تحميل", len(df), "وصفة")
 
 
 def normalize_ingredients(value) -> str:
-    """تحويل المكونات إلى نص موحد وآمن للبحث."""
     if pd.isna(value):
         return ""
     if isinstance(value, list):
@@ -23,7 +22,6 @@ def normalize_ingredients(value) -> str:
 
 
 def inspect_recipe(df, recipe_name, ingredient="chicken"):
-    """فحص وصفة محددة والتأكد من سبب نجاح فلتر المكونات."""
     required_columns = {"Name", "IngredientsList"}
     missing = required_columns - set(df.columns)
     if missing:

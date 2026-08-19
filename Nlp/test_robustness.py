@@ -1,24 +1,9 @@
-"""
-test_robustness.py — main_ingredient false-positive regression suite.
-
-Verifies the semantic matcher's main_ingredient precision:
-
-  Group A — generic queries with NO ingredient mentioned must NOT produce a
-            main_ingredient (a generic word like "salad" / "soup" / "dish"
-            must never turn into an inferred ingredient such as "cheese" /
-            "pasta", which used to corrupt recipe filtering).
-  Group B — queries that DO state an ingredient must still detect it.
-
-Run from the project root:
-    python Nlp/test_robustness.py
-"""
-
 try:
     from Nlp.query_parser import parse_query
-except ModuleNotFoundError:  # executed standalone with Nlp/ on sys.path
+except ModuleNotFoundError:  
     from query_parser import parse_query
 
-GROUP_A = [  # expected main_ingredient: None
+GROUP_A = [ 
     "refreshing salad",
     "something light for dinner",
     "healthy snack",
@@ -31,7 +16,7 @@ GROUP_A = [  # expected main_ingredient: None
     "filling dinner",
 ]
 
-GROUP_B = [  # (query, expected main_ingredient)
+GROUP_B = [ 
     ("chicken lunch", "chicken"),
     ("salmon dinner", "salmon"),
     ("tofu stir fry", "tofu"),

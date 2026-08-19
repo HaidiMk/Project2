@@ -1,11 +1,3 @@
-"""
-Runnable smoke tests for the standalone Nlp/ query parser.
-
-Run from the project root:
-    python Nlp/test_query_parser.py
-(or as a package module: python -m Nlp.test_query_parser)
-"""
-
 try:
     from Nlp.query_parser import extract_numeric_constraints, parse_query
 except ModuleNotFoundError:

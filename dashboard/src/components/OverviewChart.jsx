@@ -14,11 +14,6 @@ function hasValue(value) {
   return value !== null && value !== undefined;
 }
 
-// Chart mode for System Overview: renders only the four real, always-available
-// API values (total_recipes, total_users, completed_profiles, supported_goals).
-// Values are shown exactly as returned — no scaling, normalizing, or inventing —
-// the exact number is always labeled on/above its bar since Total Recipes can
-// dwarf the other counts.
 export default function OverviewChart({ stats }) {
   const chartData = [
     { label: "Total Recipes", value: stats?.total_recipes },

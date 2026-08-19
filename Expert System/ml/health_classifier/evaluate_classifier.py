@@ -1,23 +1,3 @@
-"""
-evaluate_classifier.py — تقييم المصنّف على مجموعة الاختبار المحجوزة
-=====================================================================
-- يعيد إنتاج نفس تقسيم 70/15/15 عبر إعادة استخدام دوال health_classifier
-  نفسها (نفس البذرة، نفس proxy التقسيم على label_diabetes) — لا إعادة تنفيذ.
-- يحمّل الأوزان والـ scaler وملفات الملصقات المحفوظة.
-- transform فقط على ميزات الاختبار (بلا fit).
-- لكل حالة من الـ 22: مثنّاة للمقاييس عند العتبة، و AUC من الاحتمالات
-  الخام (لا تعتمد على العتبة).
-
-الاستخدام:
-    python evaluate_classifier.py          → عتبة موحّدة 0.5
-                                            → metrics.md / metrics.json
-    python evaluate_classifier.py --tuned  → عتبات لكل حالة من
-       Expert System/data/health_classifier_thresholds.json (مُعايرة على
-       مجموعة التحقق فقط — الاختبار لم يُستخدم في المعايرة إطلاقاً)
-                                            → metrics_tuned.md / metrics_tuned.json
-                                            + جدول مقارنة جانبي F1@0.5 vs F1@tuned
-"""
-
 import argparse
 import json
 import sys
@@ -33,7 +13,7 @@ from sklearn.metrics import (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from health_classifier import (                   # إعادة استخدام مباشرة
+from health_classifier import (                 
     set_seed, load_data, train_val_test_split,
     HealthClassifier, SCALER_PATH, MODEL_PATH,
 )
@@ -71,7 +51,6 @@ def macro_of(rows) -> dict:
 
 def write_report(path_md: Path, path_json: Path, rows, macro, header_note: str,
                  thresholds: dict = None):
-    """جدول markdown + json موحّد للتقارير المسطّحة والمُعايرة."""
     lines = [
         "# Health Classifier — Test Set Metrics",
         "",
@@ -119,7 +98,6 @@ def main():
 
     set_seed()
 
-    # ── إعادة إنتاج التقسيم نفسه (نفس البذرة + نفس proxy) ─────────
     X, Y, label_cols = load_data()
     _, _, test_idx = train_val_test_split(X, Y)
     print(f"Test set: {len(test_idx):,} recipes x {len(label_cols)} conditions")
@@ -139,7 +117,6 @@ def main():
 
     y_true_bin = (y_test >= FLAT_THRESHOLD).astype(int)
 
-    # ── 1) خط الأساس: عتبة موحّدة 0.5 ──────────────────────────────
     rows_flat = [
         compute_metrics(y_true_bin[:, i], (probs[:, i] >= FLAT_THRESHOLD).astype(int), probs[:, i])
         for i in range(len(label_cols))
@@ -160,7 +137,6 @@ def main():
         print(f"Saved -> {METRICS_JSON}")
         return
 
-    # ── 2) عتبات مُعايرة لكل حالة (من مجموعة التحقق فقط) ──────────
     with open(THRESHOLDS_PATH, encoding="utf-8") as f:
         thresholds = json.load(f)
     assert set(thresholds) == set(label_cols), "threshold keys != label keys"
@@ -177,7 +153,6 @@ def main():
 
     macro_tuned = macro_of(rows_tuned)
 
-    # ── 3) جدول مقارنة جانبي — الأكبر تحسّناً أولاً ────────────────
     combined = sorted(
         ((r["condition"], r["f1"], rt["f1"], rt["threshold"], rt["f1"] - r["f1"])
          for r, rt in zip(rows_flat, rows_tuned)),

@@ -1,5 +1,3 @@
-
-
 import re
 from functools import reduce
 from typing import Optional, List, Callable, Any
@@ -78,26 +76,18 @@ NON_FOOD_RECIPE_PATTERN = rf"\b(?:{NON_FOOD_TERMS})\b"
 
 
 def _pick(cond, when_true, when_false):
-    """بديل التعبير الثلاثي."""
     return {True: when_true, False: when_false}[bool(cond)]
 
 
 def _do(cond, do_true: Callable, do_false: Callable):
-    """بديل if/else تنفيذي: ينفّذ الدالة المناسبة للشرط."""
     return {True: do_true, False: do_false}[bool(cond)]()
 
 
 def _fold(seq, acc, fn: Callable[[Any, Any], Any]):
-    """تطبيق fn على عناصر seq دون عودية ودون for/while صريحة."""
     return reduce(lambda accumulator, item: fn(accumulator, item), list(seq), acc)
 
 
 def _first_present(df_cols, candidates: List[str]) -> Optional[str]:
-    """
-    أول اسم من candidates موجود في الأعمدة — numpy masking دون عودية.
-    🛠️ مُصحَّحة: found[0] هو str عادي (ضمن dtype=object array)، وليس
-    numpy scalar، فلا يحتاج .item() — استدعاؤها كان يكسر الدالة فوراً.
-    """
     cand = np.array(candidates, dtype=object)
     mask = np.isin(cand, list(df_cols))
     found = cand[mask]
@@ -105,42 +95,16 @@ def _first_present(df_cols, candidates: List[str]) -> Optional[str]:
 
 
 def _build_terms_pattern(terms: List[str]) -> str:
-    """
-    يبني نمط regex بحدود كلمة (\\b) مرة واحدة من قائمة مصطلحات.
-    🛠️ إصلاح أداء: كانت _has_any_terms تبني هذا النمط من الصفر داخل
-    كل استدعاء .apply() لكل صف على حدة (384,541 مرة!) — هذا كان يرفع
-    زمن التنفيذ من أجزاء الثانية إلى عشرات الثواني/دقائق لكل قائمة
-    مصطلحات. الحل: نبني النمط مرة واحدة هنا، ونمرره جاهزاً.
-
-    🛠️ إصلاح إضافي (مكتشَف بالاستخدام الفعلي): "Grilled Scallops" لم
-    تكن تُحجب عن مستخدم نباتي لأن \\bscallop\\b لا يطابق "Scallops"
-    (الجمع) — \\b بعد "scallop" لا يعتبر "s" التالية حدّاً صحيحاً.
-    أضفنا "s?" اختيارية لنهاية كل مصطلح: تطابق "Scallops"، "Eggs"،
-    "Mayonnaises" دون كسر حماية "Eggplant"/"Wheatgrass" (لأن "plant"
-    أو "grass" أطول من حرف "s" وحيد، فالنمط لا يتقدّم بعدها أصلاً).
-    """
     has_terms = len(terms) > 0
     safe_terms = terms if has_terms else [""]
     return "|".join(r"\b" + re.escape(t.lower()) + r"s?\b" for t in safe_terms)
 
 
 def _text_matches_pattern_vectorized(series: pd.Series, pattern: str) -> pd.Series:
-    """
-    قناع بوولياني مُسرَّع (vectorized) عبر str.contains بدل .apply()
-    صف-بصف — أسرع بمراحل على أعمدة كبيرة (384K+ صف)، مع نفس دقة
-    حدود الكلمة في النمط الممرَّر.
-    """
     return series.fillna("").astype(str).str.lower().str.contains(pattern, regex=True, na=False)
 
 
 def _has_any_terms(text: str, terms: List[str]) -> bool:
-    """
-    نسخة "صف واحد" (تُستخدم فقط حين لا يمكن التجميع المُسرَّع، مثل
-    القوائم Python الحقيقية لا النصوص). تبني النمط من terms مباشرة —
-    تبقى صحيحة لكنها أبطأ من _text_matches_pattern_vectorized إذا
-    استُخدمت بكثرة؛ المسار الأساسي بالفلترة الآن يستخدم النسخة
-    المُسرَّعة مباشرة (انظر _filter_ing).
-    """
     pattern = _build_terms_pattern(terms)
     return bool(re.search(pattern, str(text).lower()))
 
@@ -178,7 +142,6 @@ class DietaryExpertSystem:
         )
 
     def _text_has_any(self, raw, terms: List[str]) -> bool:
-        """آمن مع NaN والقوائم — بلا if/comprehension."""
         is_nan = isinstance(raw, float) and np.isnan(raw)
         bad = (raw is None) or is_nan
 
@@ -189,7 +152,6 @@ class DietaryExpertSystem:
         return {True: (lambda: False), False: good}[bad]()
 
     def _build_name_pattern(self, terms: List[str]) -> str:
-        """نمط regex من المصطلحات الأطول من حرفين — بلا comprehension."""
         arr = np.array(_pick(len(terms) > 0, terms, []), dtype=object).astype(str)
         keep = np.array(list(np.char.str_len(arr) > 2))
         filtered = arr[keep].tolist()
@@ -337,7 +299,6 @@ class DietaryExpertSystem:
             max(goal_based_target, underweight_target) if is_underweight
             else goal_based_target
         )
-
        
        
         preferred = rules.get("preferred_ingredients", [])
@@ -370,9 +331,6 @@ class DietaryExpertSystem:
             else df.apply(lambda r: explain_recipe(r, profile.goal), axis=1)
         )
 
-        # نُبقي _expert_score و _ai_health_score في الناتج — طبقة TOPSIS
-        # المدمجة (topsis_model.rank_with_topsis) تحتاجها في المعادلة:
-        #     final = 0.4*TOPSIS + 0.4*AI + 0.2*expert_normalized
         df = df.drop(columns=["_final_score"])
 
         
@@ -439,18 +397,10 @@ class DietaryExpertSystem:
 
 
 def map_safe(raw):
-    """تحويل عناصر القائمة لنصوص دون map/comprehension (numpy)."""
     return np.array(raw, dtype=object).astype(str).tolist()
 
 
 def _join_escaped(terms, word_boundary=False, escape=True):
-    """
-    ابنِ نمط regex من قائمة مصطلحات بلا comprehension. الفارغ → ''.
-    🛠️ إصلاح: أضفنا "s?" اختيارية قبل الحد الأخير \\b، لمطابقة صيغ
-    الجمع بأسماء الوصفات (مثل "Scallops" بدل "Scallop") بنفس منطق
-    _build_terms_pattern، عبر np.char.add المتجهة (vectorized) بدلاً
-    من حلقة، حفاظاً على صفر if/for/while.
-    """
     def build():
         arr = np.array(terms, dtype=object).astype(str)
         low = np.char.lower(arr)
@@ -464,7 +414,6 @@ def _join_escaped(terms, word_boundary=False, escape=True):
 
 
 def _filter_name_contains(df, terms, escape=True, word_boundary=False):
-    """استبعد الصفوف التي يحوي اسمها أياً من المصطلحات."""
     def do():
         pattern = _join_escaped(terms, word_boundary=word_boundary, escape=escape)
         mask = df["Name"].fillna("").str.lower().str.contains(
@@ -476,7 +425,6 @@ def _filter_name_contains(df, terms, escape=True, word_boundary=False):
 
 
 def _filter_name_pattern(df, pattern: str):
-    """استبعد بالنمط الجاهز (قد يكون فارغاً → لا فلترة)."""
     def do():
         mask = df["Name"].fillna("").str.lower().str.contains(
             pattern, regex=True, na=False
@@ -487,33 +435,12 @@ def _filter_name_pattern(df, pattern: str):
 
 
 def _filter_ing(df, ing_col, terms, text_has_any):
-    """
-    استبعد الصفوف التي تحوي مكوّناتها أياً من المصطلحات.
-    🛠️ إصلاح أداء: بدل .apply() صف-بصف (يستدعي text_has_any() لكل صف،
-    وكانت كل استدعاء تعيد بناء pattern من الصفر — كارثي على 384K+ صف)،
-    نبني pattern مرة واحدة هنا، ثم نستخدم str.contains المُسرَّع
-    (vectorized) على العمود كاملاً دفعة واحدة. text_has_any لم تُحذف
-    من التوقيع لإبقاء التوافق مع استدعاءات أخرى، لكنها غير مستخدمة هنا.
-    """
     pattern = _build_terms_pattern(terms)
     mask = _text_matches_pattern_vectorized(df[ing_col], pattern)
     return df[~mask]
 
 
 def _apply_numeric_rule(df, item):
-    """
-    طبّق قاعدة رقمية واحدة (col, (op, val)) عبر boolean masking.
-
-    🛠️ إصلاح bug خطير جداً (مكتشَف بمراجعة دقيقة لكل قواعد الدمج):
-    كانت is_between تُرجع df بدون أي فلترة إطلاقاً (تخطٍّ كامل
-    ومتعمَّد لقاعدة between)، حتى بعد إصلاح rule_builder.py لتمرير
-    القاعدة كاملة (op, low, high) بدل قصها. النتيجة: 7 قواعد طبية
-    حرجة (مثل "سعرات الحمل+السكري يجب بين 400-550") لم تُطبَّق
-    إطلاقاً منذ بداية المشروع. الحل: نضيف عملية "between" فعلية
-    لقاموس ops، تتحقق من low<=x<=high. القيم المفقودة (NaN) تُملأ
-    بقيمة بعيدة جداً عن أي نطاق واقعي (تضمن استبعاد الصف بأمان،
-    بدل تخمين أنها "داخل النطاق" أو "خارجه" اعتباطياً).
-    """
     col, rule = item
     valid = (
         (col in df.columns)
@@ -550,19 +477,6 @@ def _apply_numeric_rule(df, item):
 
 
 def _apply_meal_filter(df, meal_type: str):
-    """
-    فلترة نوع الوجبة مع تراجع (fallback) لو لا نتائج.
-
-    🛠️ إصلاح (مكتشَف بالاستخدام الفعلي): عمود MealType بالبيانات
-    الحقيقية يحتوي فقط 4 قيم: MainDish, Other, Drink, Breakfast —
-    لا توجد قيمة "Lunch" أو "Dinner" حرفياً بالبيانات إطلاقاً. الكود
-    السابق كان يبحث عن "lunch"/"dinner" حرفياً، فلا يطابق أي صف أبداً،
-    فيتفعّل fallback (يعرض كل الوصفات) دائماً عند اختيار Lunch/Dinner
-    — يُفقد الفلتر فعليته بالكامل لهاتين الخيارين. الحل: نترجم خيار
-    الواجهة (lunch/dinner) إلى القيمة الحقيقية المطابقة (MainDish)
-    عبر MEAL_TYPE_DATA_MAP قبل البحث، مع إبقاء Breakfast كما هي
-    (تطابق مباشرة وموجودة أصلاً بالبيانات).
-    """
     real_value = MEAL_TYPE_DATA_MAP.get(meal_type.lower(), meal_type)
     active = (meal_type != "any") and ("MealType" in df.columns)
 
